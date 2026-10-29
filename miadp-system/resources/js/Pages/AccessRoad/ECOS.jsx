@@ -28,7 +28,8 @@ const INITIAL_VALUES = {
     taxes: "",
     preEngineering: "",
     engineeringSupervision: "",
-    safeguardCost: "",
+    safeguardFinancialCost: "",
+    safeguardEconomicCost: "",
 };
 
 const COST_FIELDS = [
@@ -44,7 +45,8 @@ const COST_FIELDS = [
         label: "Engineering Supervision",
         code: "H",
     },
-    { key: "safeguardCost", label: "Safeguards Cost", code: "I" },
+    { key: "safeguardFinancialCost", label: "Safeguards Financial Cost", code: "I" },
+    { key: "safeguardEconomicCost", label: "Safeguards Economic Cost", code: "I" },
 ];
 
 const toNumber = (value) => {
@@ -280,7 +282,19 @@ export default function ModalECOF({
                 Object.keys(INITIAL_VALUES).map((key) => [
                     key,
                     savedInputs[key] ??
-                        (key === "evaluationYear"
+                        (key === "safeguardFinancialCost"
+                            ? savedAnalysis?.safeguardFinancialCost ??
+                              savedAnalysis?.safeguard_financial_cost ??
+                              subproject?.safeguardFinancialCost ??
+                              subproject?.safeguard_financial_cost ??
+                              ""
+                            : key === "safeguardEconomicCost"
+                              ? savedAnalysis?.safeguardEconomicCost ??
+                                savedAnalysis?.safeguard_economic_cost ??
+                                subproject?.safeguardEconomicCost ??
+                                subproject?.safeguard_economic_cost ??
+                                ""
+                              : key === "evaluationYear"
                             ? savedAnalysis?.evaluation_year ??
                               savedInputs.evaluation_year ??
                               INITIAL_VALUES.evaluationYear
@@ -320,7 +334,8 @@ export default function ModalECOF({
         const engineeringSupervision = toNumber(
             values.engineeringSupervision,
         );
-        const safeguardCost = toNumber(values.safeguardCost);
+        const safeguardFinancialCost = toNumber(values.safeguardFinancialCost);
+        const safeguardEconomicCost = toNumber(values.safeguardEconomicCost);
 
         // Materials: 60% foreign and 40% locally sourced.
         const foreignMaterials = materials * 0.6;
@@ -357,14 +372,14 @@ export default function ModalECOF({
             taxes +
             preEngineering +
             engineeringSupervision +
-            safeguardCost;
+            safeguardFinancialCost;
 
         // Taxes are excluded from economic cost.
         const economicTotal =
             economicDirectOcmProfit +
             preEngineering +
             engineeringSupervision +
-            safeguardCost;
+            safeguardEconomicCost;
 
         return {
             materials,
@@ -389,7 +404,8 @@ export default function ModalECOF({
             taxes,
             preEngineering,
             engineeringSupervision,
-            safeguardCost,
+            safeguardFinancialCost,
+            safeguardEconomicCost,
             financialTotal,
             economicTotal,
             savings: financialTotal - economicTotal,
@@ -511,9 +527,9 @@ export default function ModalECOF({
             [
                 "K",
                 "Safeguards Cost",
-                result.safeguardCost,
+                result.safeguardFinancialCost,
                 "1.00",
-                result.safeguardCost,
+                result.safeguardEconomicCost,
             ],
             [
                 "TOTAL",
@@ -585,7 +601,8 @@ export default function ModalECOF({
             taxes: toNumber(values.taxes),
             preEngineering: toNumber(values.preEngineering),
             engineeringSupervision: toNumber(values.engineeringSupervision),
-            safeguardCost: toNumber(values.safeguardCost),
+            safeguardFinancialCost: toNumber(values.safeguardFinancialCost),
+            safeguardEconomicCost: toNumber(values.safeguardEconomicCost),
         };
 
         const payload = {
@@ -1019,12 +1036,9 @@ export default function ModalECOF({
                                             <CostRow
                                                 code="K"
                                                 label="Safeguards Cost"
-                                                financial={result.safeguardCost}
-                                                economic={result.safeguardCost}
-                                                input
-                                                inputValue={values.safeguardCost}
-                                                onInputChange={(value) => setNamedValue("safeguardCost", value)}
-                                                factor="× 1.00"
+                                                financial={result.safeguardFinancialCost}
+                                                economic={result.safeguardEconomicCost}
+                                                factor="Separate values"
                                             />
                                             <CostRow
                                                 code="Σ"
