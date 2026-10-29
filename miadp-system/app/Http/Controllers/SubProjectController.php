@@ -1,8 +1,6 @@
 <?php
-
 namespace App\Http\Controllers;
-
-use App\Models\Subproject;
+use App\Models\SubProject;
 use App\Models\TypeOfSubproject;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
