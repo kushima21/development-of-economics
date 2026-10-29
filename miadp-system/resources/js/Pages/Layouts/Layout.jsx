@@ -355,7 +355,7 @@ export default function Layout({ children, title = "Dashboard" }) {
                         </p>
 
                         <p>
-                            Hondrada
+                            Economic & Financial Decision Support System
                         </p>
                     </div>
                 </footer>
