@@ -2,9 +2,11 @@
 import { Head, Link, router } from "@inertiajs/react";
 import { useState } from "react";
 import Layout from "../Layouts/Layout";
+
 import ModalECOF from "../AccessRoad/ECOS";
 import ModalSRC from "../AccessRoad/SRC";
 import ModalRMUC from "../AccessRoad/RMUC";
+import ModalAMC from "../AccessRoad/AMC";
 
 import {
     FaArrowLeft,
@@ -30,13 +32,15 @@ import {
     FaUnlink,
 } from "react-icons/fa";
 
-const currentYear = new Date().getFullYear();
-
 /* =========================================================
-   COST COMPONENT TABS
+   CONSTANTS
 ========================================================= */
 
-const tabs = [
+const CURRENT_YEAR = new Date().getFullYear();
+
+const MANAGEMENT_URL = "/management";
+
+const TABS = [
     {
         id: "economic-cost",
         label: "Economic Cost of Subproject",
@@ -84,7 +88,7 @@ const tabs = [
     },
 ];
 
-const colorStyles = {
+const COLOR_STYLES = {
     blue: {
         icon: "bg-blue-100 text-blue-700",
         active: "border-blue-600 bg-blue-50 text-blue-800",
@@ -113,10 +117,10 @@ const colorStyles = {
 };
 
 /* =========================================================
-   GENERIC CATEGORY TEMPLATES
+   GENERIC COST MODAL TEMPLATES
 ========================================================= */
 
-const csvTemplates = {
+const CSV_TEMPLATES = {
     "annual-maintenance": [
         ["Labor Cost per Year", 0],
         ["Materials Cost per Year", 0],
@@ -136,9 +140,8 @@ const csvTemplates = {
 };
 
 /* =========================================================
-   FORMATTERS
+   FORMATTERS AND HELPERS
 ========================================================= */
-const managementUrl = "/management";
 
 const formatMoney = (value) => {
     if (value === null || value === undefined || value === "") {
@@ -167,6 +170,7 @@ const getFinancialTotal = (analysis) =>
 
 const getEconomicTotal = (analysis) =>
     analysis?.calculations?.economicTotal ??
+    analysis?.total_economi_cost ??
     analysis?.total_economic_cost ??
     analysis?.totalEconomicCost ??
     null;
@@ -174,20 +178,38 @@ const getEconomicTotal = (analysis) =>
 const getRecordKey = (record, index) =>
     record?.id ??
     record?.rmuc_id ??
-    `${record?.evaluation_year ?? "year"}-${index}`;
+    record?.src_id ??
+    record?.evaluation_year ??
+    `record-${index}`;
+
+const getEvaluationYear = (record) =>
+    record?.evaluation_year ??
+    record?.year_evaluation ??
+    CURRENT_YEAR;
+
+const getErrorMessage = (errors, fallback) => {
+    const messages = Object.values(errors ?? {})
+        .flat()
+        .filter(Boolean);
+
+    return messages.length ? messages.join(" ") : fallback;
+};
 
 /* =========================================================
    GENERIC MODAL
-   Used only for Annual Maintenance and Investment Cost.
+   Used for Investment Cost only in this page.
 ========================================================= */
 
 function GenericCostModal({ tab, onClose }) {
-    const template = csvTemplates[tab.id] ?? [];
+    const template = CSV_TEMPLATES[tab.id] ?? [];
     const Icon = tab.icon;
 
     const [values, setValues] = useState(() =>
         Object.fromEntries(
-            template.map(([label, value]) => [label, String(value)])
+            template.map(([label, value]) => [
+                label,
+                String(value),
+            ])
         )
     );
 
@@ -234,6 +256,7 @@ function GenericCostModal({ tab, onClose }) {
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
+
         URL.revokeObjectURL(url);
     };
 
@@ -254,47 +277,13 @@ function GenericCostModal({ tab, onClose }) {
         );
     };
 
-    
-const handleSubmitRMUC = (payload) => {
-    const subprojectId = selectedSubproject?.subproject_id;
-
-    if (!subprojectId) {
-        return Promise.reject(
-            new Error("Please select a subproject before saving.")
-        );
-    }
-
-    return new Promise((resolve, reject) => {
-        router.post(
-            `/cost-components/${encodeURIComponent(subprojectId)}/road-maintenance-cost`,
-            payload,
-            {
-                preserveScroll: true,
-
-                onSuccess: () => {
-                    closeModal();
-                    resolve();
-                },
-
-                onError: (errors) => {
-                    reject(
-                        new Error(
-                            Object.values(errors ?? {}).flat().join(" ") ||
-                            "Unable to save road maintenance costs."
-                        )
-                    );
-                },
-            }
-        );
-    });
-};
-
-
     return (
         <div
             className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-slate-950/70 p-3 backdrop-blur-sm sm:p-6"
             onMouseDown={(event) => {
-                if (event.target === event.currentTarget) onClose();
+                if (event.target === event.currentTarget) {
+                    onClose();
+                }
             }}
         >
             <div
@@ -310,6 +299,7 @@ const handleSubmitRMUC = (payload) => {
 
                         <div className="mt-3 flex items-center gap-3">
                             <Icon className="text-2xl" />
+
                             <h2 className="text-2xl font-black">
                                 {tab.label}
                             </h2>
@@ -345,7 +335,10 @@ const handleSubmitRMUC = (payload) => {
                                     required
                                     value={value}
                                     onChange={(event) =>
-                                        updateValue(label, event.target.value)
+                                        updateValue(
+                                            label,
+                                            event.target.value
+                                        )
                                     }
                                     className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                                 />
@@ -394,23 +387,57 @@ const handleSubmitRMUC = (payload) => {
 }
 
 /* =========================================================
+   REUSABLE TABLE EMPTY STATE
+========================================================= */
+
+function EmptyTable({ colSpan, title, description }) {
+    return (
+        <tr>
+            <td colSpan={colSpan} className="px-5 py-12 text-center">
+                <FaClipboardList className="mx-auto text-3xl text-slate-300" />
+
+                <p className="mt-3 font-bold text-slate-800">
+                    {title}
+                </p>
+
+                {description && (
+                    <p className="mt-1 text-sm text-slate-500">
+                        {description}
+                    </p>
+                )}
+            </td>
+        </tr>
+    );
+}
+
+/* =========================================================
    MAIN COST COMPONENTS PAGE
 ========================================================= */
+
 export default function CostComponents({
     subprojects = [],
     selectedSubproject = null,
     economicCostAnalyses = [],
     safeguardCostAnalyses = [],
     rmucAnalyses = [],
-    managementUrl = null,
+    annualMaintenanceAnalyses = [],
+    managementUrl = MANAGEMENT_URL,
 }) {
+    /* -----------------------------------------------------
+       PAGE STATE
+    ----------------------------------------------------- */
+
     const [selectedTab, setSelectedTab] = useState("economic-cost");
     const [modalOpen, setModalOpen] = useState(false);
     const [editingTab, setEditingTab] = useState(null);
     const [modalAnalysis, setModalAnalysis] = useState(null);
 
+    /* -----------------------------------------------------
+       CURRENT DATA
+    ----------------------------------------------------- */
+
     const currentTab =
-        tabs.find((tab) => tab.id === selectedTab) ?? tabs[0];
+        TABS.find((tab) => tab.id === selectedTab) ?? TABS[0];
 
     const CurrentIcon = currentTab.icon;
 
@@ -430,13 +457,15 @@ export default function CostComponents({
         selectedSubproject?.subproject_id
     );
 
+    const subprojectId = selectedSubproject?.subproject_id;
+
     const subprojectCode =
         selectedSubproject?.subproject_code ||
-        `SP-${selectedSubproject?.subproject_id ?? ""}`;
+        `SP-${subprojectId ?? ""}`;
 
-    /* =====================================================
-       MODAL HANDLERS
-    ===================================================== */
+    /* -----------------------------------------------------
+       MODAL CONTROLS
+    ----------------------------------------------------- */
 
     const closeModal = () => {
         setModalOpen(false);
@@ -444,120 +473,276 @@ export default function CostComponents({
         setModalAnalysis(null);
     };
 
-    const openInputForm = () => {
+    const openNewModal = (tabId) => {
         if (!hasSelectedSubproject) return;
 
-        setSelectedTab("economic-cost");
-        setEditingTab(tabs[0]);
-        setModalAnalysis(null);
-        setModalOpen(true);
-    };
+        const tab = TABS.find((item) => item.id === tabId);
 
-    const openSavedAnalysis = (analysis) => {
-        if (!hasSelectedSubproject || !analysis) return;
-
-        setSelectedTab("economic-cost");
-        setEditingTab(tabs[0]);
-        setModalAnalysis(analysis);
-        setModalOpen(true);
-    };
-
-    const openSavedSRCAnalysis = (analysis) => {
-        if (!hasSelectedSubproject || !analysis) return;
-
-        const tab = tabs.find((item) => item.id === "safeguard-cost");
         if (!tab) return;
 
-        setSelectedTab(tab.id);
-        setEditingTab(tab);
-        setModalAnalysis(analysis);
-        setModalOpen(true);
-    };
-
-    const openSavedRMUCAnalysis = (analysis) => {
-        if (!hasSelectedSubproject || !analysis) return;
-
-        const tab = tabs.find((item) => item.id === "road-maintenance");
-        if (!tab) return;
-
-        setSelectedTab(tab.id);
-        setEditingTab(tab);
-        setModalAnalysis(analysis);
-        setModalOpen(true);
-    };
-
-    const openCostModal = (tab) => {
-        if (!tab) return;
-
-        if (
-            ["economic-cost", "safeguard-cost", "road-maintenance"].includes(
-                tab.id
-            ) &&
-            !hasSelectedSubproject
-        ) {
-            return;
-        }
-
+        setSelectedTab(tabId);
         setEditingTab(tab);
         setModalAnalysis(null);
         setModalOpen(true);
     };
 
-    /* =====================================================
-       SHARED POST HANDLER
-    ===================================================== */
+    const openSavedModal = (tabId, analysis) => {
+        if (!hasSelectedSubproject || !analysis) return;
+
+        const tab = TABS.find((item) => item.id === tabId);
+
+        if (!tab) return;
+
+        setSelectedTab(tabId);
+        setEditingTab(tab);
+        setModalAnalysis(analysis);
+        setModalOpen(true);
+    };
+
+    const openSavedAnalysis = (analysis) =>
+        openSavedModal("economic-cost", analysis);
+
+    const openSavedSRCAnalysis = (analysis) =>
+        openSavedModal("safeguard-cost", analysis);
+
+    const openSavedRMUCAnalysis = (analysis) =>
+        openSavedModal("road-maintenance", analysis);
+
+    const openSavedAMCAnalysis = (analysis) =>
+        openSavedModal("annual-maintenance", analysis);
+
+    /* -----------------------------------------------------
+       SHARED INERTIA POST HANDLER
+    ----------------------------------------------------- */
 
     const postCostPayload = (endpoint, payload, errorMessage) =>
-        new Promise((resolve, reject) => {
-            router.post(endpoint, payload, {
-                preserveScroll: true,
+    new Promise((resolve, reject) => {
+        router.post(endpoint, payload, {
+            preserveScroll: true,
+            preserveState: true,
 
-                onSuccess: () => {
-                    closeModal();
-                    resolve();
-                },
+            onSuccess: () => {
+                closeModal();
+                resolve(true);
+            },
 
-                onError: (errors) => {
-                    reject(
-                        new Error(
-                            Object.values(errors ?? {})
-                                .flat()
-                                .join(" ") || errorMessage
-                        )
-                    );
-                },
-            });
+            onError: (errors) => {
+                reject(
+                    new Error(
+                        getErrorMessage(errors, errorMessage)
+                    )
+                );
+            },
+
+            onHttpException: (response) => {
+                reject(
+                    new Error(
+                        response?.status
+                            ? `${errorMessage} Server returned HTTP ${response.status}.`
+                            : errorMessage
+                    )
+                );
+            },
+
+            onNetworkError: () => {
+                reject(
+                    new Error(
+                        "Network error. Please check your connection and try again."
+                    )
+                );
+            },
         });
+    });
 
     /* =====================================================
-       SAVE ECOS
+       SAVE 01 — ECONOMIC COST OF SUBPROJECT (ECOS)
     ===================================================== */
 
-    const handleSubmitEconomicCost = (payload) => {
-        const subprojectId = selectedSubproject?.subproject_id;
-
-        if (!subprojectId) {
-            return Promise.reject(
-                new Error("Please select a subproject before saving.")
-            );
-        }
-
-        return postCostPayload(
-            `/cost-components/${encodeURIComponent(
-                subprojectId
-            )}/economic-cost`,
-            payload,
-            "Unable to save the economic cost analysis."
+    const handleSubmitEconomicCost = (modalPayload = {}) => {
+    if (!subprojectId) {
+        return Promise.reject(
+            new Error(
+                "Please select a subproject before saving the economic cost analysis."
+            )
         );
+    }
+
+    // Accept either a direct payload or a payload wrapped in { data }.
+    const payload =
+        modalPayload?.data &&
+        typeof modalPayload.data === "object"
+            ? modalPayload.data
+            : modalPayload;
+
+    if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof payload.preventDefault === "function"
+    ) {
+        return Promise.reject(
+            new Error("Invalid economic cost data.")
+        );
+    }
+
+    // Normalize evaluation year.
+    const evaluationYear = Number(
+        payload.evaluationYear ??
+        payload.evaluation_year ??
+        payload.year_evaluation ??
+        modalAnalysis?.evaluation_year ??
+        modalAnalysis?.year_evaluation ??
+        CURRENT_YEAR
+    );
+
+    if (
+        !Number.isInteger(evaluationYear) ||
+        evaluationYear < 2000 ||
+        evaluationYear > 2100
+    ) {
+        return Promise.reject(
+            new Error("Please provide a valid evaluation year.")
+        );
+    }
+
+    // Read safeguard values from the modal or previously saved inputs.
+    const savedInputs = payload.input_values ?? {};
+
+    const safeguardFinancialCost = Number(
+        payload.safeguardFinancialCost ??
+        payload.safeguardCost ??
+        savedInputs.safeguardFinancialCost ??
+        savedInputs.safeguardCost ??
+        0
+    );
+
+    const safeguardEconomicCost = Number(
+        payload.safeguardEconomicCost ??
+        savedInputs.safeguardEconomicCost ??
+        0
+    );
+
+    if (
+        !Number.isFinite(safeguardFinancialCost) ||
+        safeguardFinancialCost < 0 ||
+        !Number.isFinite(safeguardEconomicCost) ||
+        safeguardEconomicCost < 0
+    ) {
+        return Promise.reject(
+            new Error("Please enter valid safeguard cost values.")
+        );
+    }
+
+    // Preserve the other ECOS input fields.
+    const normalizedInputs = {
+        ...savedInputs,
+
+        materials: Number(
+            payload.materials ?? savedInputs.materials ?? 0
+        ),
+
+        equipment: Number(
+            payload.equipment ?? savedInputs.equipment ?? 0
+        ),
+
+        subtotalLabor: Number(
+            payload.subtotalLabor ?? savedInputs.subtotalLabor ?? 0
+        ),
+
+        ocm: Number(
+            payload.ocm ?? savedInputs.ocm ?? 0
+        ),
+
+        contractorProfit: Number(
+            payload.contractorProfit ??
+            savedInputs.contractorProfit ??
+            0
+        ),
+
+        taxes: Number(
+            payload.taxes ?? savedInputs.taxes ?? 0
+        ),
+
+        preEngineering: Number(
+            payload.preEngineering ??
+            savedInputs.preEngineering ??
+            0
+        ),
+
+        engineeringSupervision: Number(
+            payload.engineeringSupervision ??
+            savedInputs.engineeringSupervision ??
+            0
+        ),
+
+        safeguardCost: safeguardFinancialCost,
+        safeguardFinancialCost,
+        safeguardEconomicCost,
+
+        evaluationYear,
+        evaluation_year: evaluationYear,
     };
 
+    // Keep the calculation results generated by ModalECOF.
+    const calculations = {
+        ...(payload.calculations ?? {}),
+
+        financialTotal: Number(
+            payload.calculations?.financialTotal ?? 0
+        ),
+
+        economicTotal: Number(
+            payload.calculations?.economicTotal ?? 0
+        ),
+
+        savings: Number(
+            payload.calculations?.savings ?? 0
+        ),
+    };
+
+    // Final payload must match Laravel controller validation.
+    const normalizedPayload = {
+        ...payload,
+
+        ...normalizedInputs,
+
+        subproject_id: subprojectId,
+
+        evaluationYear,
+        evaluation_year: evaluationYear,
+
+        foreign_factor: Number(
+            payload.foreign_factor ?? 1.2
+        ),
+
+        unskilled_factor: Number(
+            payload.unskilled_factor ?? 0.6
+        ),
+
+        // Controller expects this field.
+        safeguardCost: safeguardFinancialCost,
+
+        safeguardFinancialCost,
+        safeguardEconomicCost,
+
+        input_values: normalizedInputs,
+
+        calculations,
+    };
+
+    return postCostPayload(
+        `/cost-components/${encodeURIComponent(
+            subprojectId
+        )}/economic-cost`,
+        normalizedPayload,
+        "Unable to save the Economic Cost of Subproject analysis."
+    );
+};
+
     /* =====================================================
-       SAVE SRC
+       SAVE 02 — SAFEGUARD-RELATED COST (SRC)
     ===================================================== */
 
-    const handleSubmitSRC = (payload) => {
-        const subprojectId = selectedSubproject?.subproject_id;
-
+    const handleSubmitSRC = (modalPayload = {}) => {
         if (!subprojectId) {
             return Promise.reject(
                 new Error(
@@ -566,23 +751,39 @@ export default function CostComponents({
             );
         }
 
+        const payload = modalPayload?.data ?? modalPayload ?? {};
+
+        const evaluationYear = Number(
+            payload.evaluation_year ??
+            payload.year_evaluation ??
+            modalAnalysis?.evaluation_year ??
+            CURRENT_YEAR
+        );
+
+        if (!Number.isInteger(evaluationYear)) {
+            return Promise.reject(
+                new Error("Please provide a valid evaluation year.")
+            );
+        }
+
         return postCostPayload(
             `/cost-components/${encodeURIComponent(
                 subprojectId
             )}/safeguard-cost`,
-            payload,
+            {
+                ...payload,
+                subproject_id: subprojectId,
+                evaluation_year: evaluationYear,
+            },
             "Unable to save safeguard-related cost."
         );
     };
 
     /* =====================================================
-       SAVE RMUC
-       Confirm that this endpoint exists in routes/web.php.
+       SAVE 03 — ROAD MAINTENANCE UNIT COST (RMUC)
     ===================================================== */
 
-    const handleSubmitRMUC = (payload) => {
-        const subprojectId = selectedSubproject?.subproject_id;
-
+    const handleSubmitRMUC = (modalPayload = {}) => {
         if (!subprojectId) {
             return Promise.reject(
                 new Error(
@@ -591,28 +792,99 @@ export default function CostComponents({
             );
         }
 
+        const payload = modalPayload?.data ?? modalPayload ?? {};
+
+        const evaluationYear = Number(
+            payload.evaluation_year ??
+            payload.year_evaluation ??
+            modalAnalysis?.evaluation_year ??
+            CURRENT_YEAR
+        );
+
+        if (!Number.isInteger(evaluationYear)) {
+            return Promise.reject(
+                new Error("Please provide a valid evaluation year.")
+            );
+        }
+
         return postCostPayload(
             `/cost-components/${encodeURIComponent(
                 subprojectId
             )}/road-maintenance-cost`,
-            payload,
+            {
+                ...payload,
+                subproject_id: subprojectId,
+                evaluation_year: evaluationYear,
+            },
             "Unable to save the road maintenance unit cost."
         );
     };
 
     /* =====================================================
-       ECOS ↔ SRC MATCHING
+       SAVE 04 — ANNUAL MAINTENANCE COST (AMC)
     ===================================================== */
+
+    const handleSubmitAMC = (modalPayload = {}) => {
+        if (!subprojectId) {
+            return Promise.reject(
+                new Error(
+                    "Please select a subproject before saving annual maintenance costs."
+                )
+            );
+        }
+
+        const payload = modalPayload?.data ?? modalPayload ?? {};
+
+        /*
+         * AMC must use the evaluation year of the selected RMUC
+         * record, not automatically the current year.
+         */
+        const evaluationYear = Number(
+            modalAnalysis?.evaluation_year ??
+            modalAnalysis?.year_evaluation ??
+            payload.evaluation_year ??
+            payload.year_evaluation ??
+            CURRENT_YEAR
+        );
+
+        if (!Number.isInteger(evaluationYear)) {
+            return Promise.reject(
+                new Error("Please provide a valid evaluation year.")
+            );
+        }
+
+        return postCostPayload(
+            `/cost-components/${encodeURIComponent(
+                subprojectId
+            )}/annual-maintenance-cost`,
+            {
+                ...payload,
+                subproject_id: subprojectId,
+                evaluation_year: evaluationYear,
+
+                rmuc_id:
+                    payload.rmuc_id ??
+                    modalAnalysis?.rmuc_id ??
+                    modalAnalysis?.id ??
+                    null,
+            },
+            "Unable to save annual maintenance costs."
+        );
+    };
+
+    /* -----------------------------------------------------
+       ECOS ↔ SRC MATCHING
+    ----------------------------------------------------- */
 
     const getMatchingECOS = (src) =>
         savedAnalyses.find(
             (ecos) =>
-                Number(ecos.evaluation_year) ===
-                Number(src.evaluation_year)
+                Number(getEvaluationYear(ecos)) ===
+                Number(getEvaluationYear(src))
         );
 
     /* =====================================================
-       PAGE
+       PAGE RENDER
     ===================================================== */
 
     return (
@@ -621,30 +893,24 @@ export default function CostComponents({
 
             <div className="min-h-screen bg-slate-50">
                 <div className="mx-auto max-w-[1600px] space-y-6 px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-                    {/* PAGE HEADER */}
+
+                    {/* =================================================
+                        PAGE HEADER
+                    ================================================= */}
+
                     <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-teal-900 shadow-xl">
                         <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border-[40px] border-white/[0.04]" />
 
                         <div className="relative p-5 sm:p-8 lg:p-9">
                             <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-{managementUrl ? (
-    <Link
-        href={managementUrl}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
-    >
-        <FaArrowLeft />
-        Back to Subproject Management
-    </Link>
-) : (
-    <button
-        type="button"
-        onClick={() => window.history.back()}
-        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
-    >
-        <FaArrowLeft />
-         Back to Subproject Management
-    </button>
-)}
+                                <Link
+                                    href={managementUrl}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                                >
+                                    <FaArrowLeft />
+                                    Back to Subproject Management
+                                </Link>
+
                                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-emerald-100">
                                     <FaCheckCircle />
                                     MIADP Decision Support System
@@ -664,9 +930,10 @@ export default function CostComponents({
 
                                     <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
                                         Manage economic cost analysis,
-                                        safeguard-related expenses, and road
-                                        maintenance cost records by subproject
-                                        and evaluation year.
+                                        safeguard-related expenses, road
+                                        maintenance unit costs, and
+                                        infrastructure investment records
+                                        by subproject and evaluation year.
                                     </p>
                                 </div>
 
@@ -675,9 +942,11 @@ export default function CostComponents({
                                         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-blue-400/15 text-blue-200">
                                             <FaCalculator />
                                         </div>
+
                                         <p className="text-2xl font-black text-white">
                                             05
                                         </p>
+
                                         <p className="mt-1 text-xs text-slate-300">
                                             Cost Categories
                                         </p>
@@ -687,9 +956,11 @@ export default function CostComponents({
                                         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-200">
                                             <FaChartLine />
                                         </div>
+
                                         <p className="text-2xl font-black text-white">
                                             MIADP
                                         </p>
+
                                         <p className="mt-1 text-xs text-slate-300">
                                             Cost Evaluation
                                         </p>
@@ -710,13 +981,17 @@ export default function CostComponents({
                         </div>
                     </header>
 
-                    {/* SELECTED SUBPROJECT */}
+                    {/* =================================================
+                        SELECTED SUBPROJECT
+                    ================================================= */}
+
                     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                             <div>
                                 <h2 className="text-lg font-extrabold text-slate-900">
                                     Selected Subproject
                                 </h2>
+
                                 <p className="mt-1 text-sm text-slate-500">
                                     Each evaluation year is stored as a
                                     separate cost record.
@@ -742,6 +1017,7 @@ export default function CostComponents({
                                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                                         Subproject Title
                                     </p>
+
                                     <p className="mt-1 font-bold text-slate-800">
                                         {selectedSubproject.subproject_title ||
                                             "Not provided"}
@@ -752,6 +1028,7 @@ export default function CostComponents({
                                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                                         Location
                                     </p>
+
                                     <p className="mt-1 font-semibold text-slate-700">
                                         {selectedSubproject.subproject_location ||
                                             "Not provided"}
@@ -762,6 +1039,7 @@ export default function CostComponents({
                                     <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
                                         Total Project Cost
                                     </p>
+
                                     <p className="mt-1 font-bold text-slate-800">
                                         {formatMoney(
                                             selectedSubproject.total_project_cost
@@ -772,12 +1050,16 @@ export default function CostComponents({
                         )}
                     </section>
 
-                    {/* CATEGORY SELECTOR */}
+                    {/* =================================================
+                        CATEGORY SELECTOR
+                    ================================================= */}
+
                     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div className="border-b border-slate-200 px-5 py-5 sm:px-6">
                             <h2 className="text-lg font-extrabold text-slate-900">
                                 Cost Component Categories
                             </h2>
+
                             <p className="mt-1 text-sm text-slate-500">
                                 Choose a category to display its records
                                 and available actions.
@@ -785,10 +1067,10 @@ export default function CostComponents({
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-5">
-                            {tabs.map((tab) => {
+                            {TABS.map((tab) => {
                                 const Icon = tab.icon;
                                 const isActive = selectedTab === tab.id;
-                                const styles = colorStyles[tab.color];
+                                const styles = COLOR_STYLES[tab.color];
 
                                 return (
                                     <button
@@ -812,6 +1094,7 @@ export default function CostComponents({
                                             >
                                                 <Icon />
                                             </span>
+
                                             <span className="text-xs font-black text-slate-400">
                                                 {tab.number}
                                             </span>
@@ -846,12 +1129,18 @@ export default function CostComponents({
                         </div>
                     </section>
 
-                    {/* ACTIVE CATEGORY HEADER */}
+                    {/* =================================================
+                        ACTIVE CATEGORY CONTENT
+                    ================================================= */}
+
                     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+                        {/* ACTIVE CATEGORY HEADER */}
+
                         <div className="flex flex-col justify-between gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:p-6">
                             <div className="flex items-start gap-4">
                                 <div
-                                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-xl ${colorStyles[currentTab.color].icon}`}
+                                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-xl ${COLOR_STYLES[currentTab.color].icon}`}
                                 >
                                     <CurrentIcon />
                                 </div>
@@ -860,40 +1149,39 @@ export default function CostComponents({
                                     <span className="text-xs font-black uppercase tracking-wider text-slate-400">
                                         TAB {currentTab.number}
                                     </span>
+
                                     <h2 className="mt-1 text-xl font-black text-slate-900 sm:text-2xl">
                                         {currentTab.label}
                                     </h2>
+
                                     <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
                                         {currentTab.description}
                                     </p>
                                 </div>
                             </div>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    currentTab.id === "economic-cost"
-                                        ? openInputForm()
-                                        : openCostModal(currentTab)
-                                }
-                                disabled={
-                                    [
-                                        "economic-cost",
-                                        "safeguard-cost",
-                                        "road-maintenance",
-                                    ].includes(currentTab.id) &&
-                                    !hasSelectedSubproject
-                                }
-                                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                <FaPlus />
-                                Open Input Form
-                            </button>
+                            {currentTab.id !== "annual-maintenance" && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        openNewModal(currentTab.id)
+                                    }
+                                    disabled={
+                                        currentTab.id !== "investment-cost" &&
+                                        !hasSelectedSubproject
+                                    }
+                                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <FaPlus />
+                                    Open Input Form
+                                </button>
+                            )}
                         </div>
 
                         {/* =================================================
-                            ECONOMIC COST RECORDS
+                            01 — ECONOMIC COST RECORDS
                         ================================================= */}
+
                         {currentTab.id === "economic-cost" && (
                             <div className="p-5 sm:p-6">
                                 <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -901,6 +1189,7 @@ export default function CostComponents({
                                         <h3 className="text-lg font-extrabold text-slate-900">
                                             Saved Economic Cost Evaluations
                                         </h3>
+
                                         <p className="mt-1 text-sm text-slate-500">
                                             View saved economic cost records
                                             by evaluation year.
@@ -909,7 +1198,9 @@ export default function CostComponents({
 
                                     <button
                                         type="button"
-                                        onClick={openInputForm}
+                                        onClick={() =>
+                                            openNewModal("economic-cost")
+                                        }
                                         disabled={!hasSelectedSubproject}
                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
@@ -934,63 +1225,70 @@ export default function CostComponents({
 
                                         <tbody className="divide-y divide-slate-100">
                                             {!hasSelectedSubproject ? (
-                                                <tr>
-                                                    <td colSpan={7} className="px-5 py-12 text-center">
-                                                        <FaInfoCircle className="mx-auto text-2xl text-amber-500" />
-                                                        <p className="mt-3 font-bold">No subproject selected</p>
-                                                        <p className="mt-1 text-sm text-slate-500">
-                                                            Open this page from a subproject to view its evaluations.
-                                                        </p>
-                                                    </td>
-                                                </tr>
+                                                <EmptyTable
+                                                    colSpan={7}
+                                                    title="No subproject selected"
+                                                    description="Open this page from a subproject to view its evaluations."
+                                                />
                                             ) : savedAnalyses.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={7} className="px-5 py-12 text-center">
-                                                        <FaClipboardList className="mx-auto text-3xl text-slate-300" />
-                                                        <p className="mt-3 font-bold">No saved evaluations yet</p>
-                                                        <p className="mt-1 text-sm text-slate-500">
-                                                            Click New Evaluation to create the first record.
-                                                        </p>
-                                                    </td>
-                                                </tr>
+                                                <EmptyTable
+                                                    colSpan={7}
+                                                    title="No saved evaluations yet"
+                                                    description="Click New Evaluation to create the first record."
+                                                />
                                             ) : (
                                                 savedAnalyses.map((analysis, index) => (
                                                     <tr
-                                                        key={analysis.id ?? `${analysis.evaluation_year}-${index}`}
+                                                        key={getRecordKey(analysis, index)}
                                                         className="transition hover:bg-blue-50/40"
                                                     >
                                                         <td className="px-5 py-4 text-sm text-slate-500">
                                                             {index + 1}
                                                         </td>
+
                                                         <td className="px-5 py-4">
                                                             <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-bold text-blue-800">
-                                                                {formatYear(analysis.evaluation_year)}
+                                                                {formatYear(getEvaluationYear(analysis))}
                                                             </span>
                                                         </td>
+
                                                         <td className="px-5 py-4">
                                                             <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-700">
                                                                 {subprojectCode}
                                                             </span>
                                                         </td>
+
                                                         <td className="px-5 py-4">
                                                             <p className="font-bold text-slate-800">
-                                                                {selectedSubproject?.subproject_title || "Untitled Subproject"}
+                                                                {selectedSubproject?.subproject_title ||
+                                                                    "Untitled Subproject"}
                                                             </p>
+
                                                             <p className="mt-1 text-xs text-slate-500">
-                                                                {selectedSubproject?.subproject_location || "Location not provided"}
+                                                                {selectedSubproject?.subproject_location ||
+                                                                    "Location not provided"}
                                                             </p>
                                                         </td>
+
                                                         <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold">
-                                                            {formatMoney(getFinancialTotal(analysis))}
+                                                            {formatMoney(
+                                                                getFinancialTotal(analysis)
+                                                            )}
                                                         </td>
+
                                                         <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold">
-                                                            {formatMoney(getEconomicTotal(analysis))}
+                                                            {formatMoney(
+                                                                getEconomicTotal(analysis)
+                                                            )}
                                                         </td>
+
                                                         <td className="px-5 py-4 text-center">
                                                             <button
                                                                 type="button"
-                                                                title={`View evaluation for ${analysis.evaluation_year}`}
-                                                                onClick={() => openSavedAnalysis(analysis)}
+                                                                title={`View evaluation for ${getEvaluationYear(analysis)}`}
+                                                                onClick={() =>
+                                                                    openSavedAnalysis(analysis)
+                                                                }
                                                                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
                                                             >
                                                                 <FaEye />
@@ -1005,11 +1303,18 @@ export default function CostComponents({
 
                                 <div className="mt-4 flex gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
                                     <FaInfoCircle className="mt-0.5 shrink-0 text-blue-700" />
+
                                     <div className="text-xs leading-5 text-blue-900">
-                                        <p className="font-bold">Evaluation record rules</p>
+                                        <p className="font-bold">
+                                            Evaluation record rules
+                                        </p>
+
                                         <p className="mt-1">
-                                            A different evaluation year creates a separate record.
-                                            Saving the same year for the same subproject should update that year's record in the backend.
+                                            A different evaluation year creates
+                                            a separate record. Saving the same
+                                            year for the same subproject should
+                                            update that year's record in the
+                                            backend.
                                         </p>
                                     </div>
                                 </div>
@@ -1017,8 +1322,9 @@ export default function CostComponents({
                         )}
 
                         {/* =================================================
-                            SAFEGUARD COST RECORDS
+                            02 — SAFEGUARD COST RECORDS
                         ================================================= */}
+
                         {currentTab.id === "safeguard-cost" && (
                             <div className="p-5 sm:p-6">
                                 <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -1026,17 +1332,17 @@ export default function CostComponents({
                                         <h3 className="text-lg font-extrabold text-slate-900">
                                             Saved Safeguard-Related Costs
                                         </h3>
+
                                         <p className="mt-1 text-sm text-slate-500">
-                                            View or update SRC records by evaluation year.
+                                            View or update SRC records by
+                                            evaluation year.
                                         </p>
                                     </div>
 
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            openCostModal(
-                                                tabs.find((tab) => tab.id === "safeguard-cost")
-                                            )
+                                            openNewModal("safeguard-cost")
                                         }
                                         disabled={!hasSelectedSubproject}
                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
@@ -1049,6 +1355,7 @@ export default function CostComponents({
                                 {!hasSelectedSubproject ? (
                                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
                                         <FaInfoCircle className="mx-auto text-2xl text-amber-600" />
+
                                         <p className="mt-3 font-bold text-amber-900">
                                             No subproject selected
                                         </p>
@@ -1069,35 +1376,38 @@ export default function CostComponents({
 
                                             <tbody className="divide-y divide-slate-100">
                                                 {savedSRCAnalyses.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-5 py-12 text-center">
-                                                            <FaClipboardList className="mx-auto text-3xl text-slate-300" />
-                                                            <p className="mt-3 font-bold">No safeguard cost records yet</p>
-                                                        </td>
-                                                    </tr>
+                                                    <EmptyTable
+                                                        colSpan={6}
+                                                        title="No safeguard cost records yet"
+                                                    />
                                                 ) : (
                                                     savedSRCAnalyses.map((src, index) => {
-                                                        const matchingECOS = getMatchingECOS(src);
+                                                        const matchingECOS =
+                                                            getMatchingECOS(src);
 
                                                         return (
                                                             <tr
-                                                                key={src.id ?? `${src.evaluation_year}-${index}`}
+                                                                key={getRecordKey(src, index)}
                                                                 className="transition hover:bg-emerald-50/40"
                                                             >
                                                                 <td className="px-5 py-4 text-sm text-slate-500">
                                                                     {index + 1}
                                                                 </td>
+
                                                                 <td className="px-5 py-4">
                                                                     <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-800">
-                                                                        {formatYear(src.evaluation_year)}
+                                                                        {formatYear(getEvaluationYear(src))}
                                                                     </span>
                                                                 </td>
+
                                                                 <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold">
-                                                                    {formatMoney(src.total_financial_cost ?? src.totalFinancialCost)}
+                                                                    {formatMoney(getFinancialTotal(src))}
                                                                 </td>
+
                                                                 <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold">
-                                                                    {formatMoney(src.total_economic_cost ?? src.totalEconomicCost)}
+                                                                    {formatMoney(getEconomicTotal(src))}
                                                                 </td>
+
                                                                 <td className="px-5 py-4">
                                                                     {matchingECOS ? (
                                                                         <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
@@ -1111,11 +1421,14 @@ export default function CostComponents({
                                                                         </span>
                                                                     )}
                                                                 </td>
+
                                                                 <td className="px-5 py-4 text-center">
                                                                     <button
                                                                         type="button"
-                                                                        title={`View SRC for ${src.evaluation_year}`}
-                                                                        onClick={() => openSavedSRCAnalysis(src)}
+                                                                        title={`View SRC for ${getEvaluationYear(src)}`}
+                                                                        onClick={() =>
+                                                                            openSavedSRCAnalysis(src)
+                                                                        }
                                                                         className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                                                                     >
                                                                         <FaEye />
@@ -1132,10 +1445,15 @@ export default function CostComponents({
 
                                 <div className="mt-4 flex gap-3 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                                     <FaInfoCircle className="mt-0.5 shrink-0 text-emerald-700" />
+
                                     <div className="text-xs leading-5 text-emerald-900">
-                                        <p className="font-bold">SRC and ECOS relationship</p>
+                                        <p className="font-bold">
+                                            SRC and ECOS relationship
+                                        </p>
+
                                         <p className="mt-1">
-                                            SRC records are matched to ECOS by evaluation year.
+                                            SRC records are matched to ECOS
+                                            by evaluation year.
                                         </p>
                                     </div>
                                 </div>
@@ -1143,8 +1461,9 @@ export default function CostComponents({
                         )}
 
                         {/* =================================================
-                            ROAD MAINTENANCE UNIT COST RECORDS
+                            03 — ROAD MAINTENANCE UNIT COST RECORDS
                         ================================================= */}
+
                         {currentTab.id === "road-maintenance" && (
                             <div className="p-5 sm:p-6">
                                 <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -1152,17 +1471,17 @@ export default function CostComponents({
                                         <h3 className="text-lg font-extrabold text-slate-900">
                                             Saved Road Maintenance Unit Costs
                                         </h3>
+
                                         <p className="mt-1 text-sm text-slate-500">
-                                            Each subproject can have a separate RMUC record for each evaluation year.
+                                            Each subproject can have a separate
+                                            RMUC record for each evaluation year.
                                         </p>
                                     </div>
 
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            openCostModal(
-                                                tabs.find((tab) => tab.id === "road-maintenance")
-                                            )
+                                            openNewModal("road-maintenance")
                                         }
                                         disabled={!hasSelectedSubproject}
                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1174,7 +1493,8 @@ export default function CostComponents({
 
                                 {!hasSelectedSubproject ? (
                                     <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                                        Select a subproject to view or save RMUC evaluations.
+                                        Select a subproject to view or save
+                                        RMUC evaluations.
                                     </div>
                                 ) : (
                                     <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -1191,17 +1511,11 @@ export default function CostComponents({
 
                                             <tbody className="divide-y divide-slate-100">
                                                 {savedRMUCAnalyses.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={5} className="px-5 py-12 text-center">
-                                                            <FaClipboardList className="mx-auto text-3xl text-slate-300" />
-                                                            <p className="mt-3 font-bold text-slate-800">
-                                                                No RMUC evaluations saved yet
-                                                            </p>
-                                                            <p className="mt-1 text-sm text-slate-500">
-                                                                Click New RMUC Evaluation to create a record.
-                                                            </p>
-                                                        </td>
-                                                    </tr>
+                                                    <EmptyTable
+                                                        colSpan={5}
+                                                        title="No RMUC evaluations saved yet"
+                                                        description="Click New RMUC Evaluation to create a record."
+                                                    />
                                                 ) : (
                                                     savedRMUCAnalyses.map((record, index) => (
                                                         <tr
@@ -1211,22 +1525,28 @@ export default function CostComponents({
                                                             <td className="px-5 py-4 text-sm text-slate-500">
                                                                 {index + 1}
                                                             </td>
+
                                                             <td className="px-5 py-4">
                                                                 <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-800">
-                                                                    {formatYear(record.evaluation_year)}
+                                                                    {formatYear(getEvaluationYear(record))}
                                                                 </span>
                                                             </td>
+
                                                             <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
                                                                 {formatMoney(getFinancialTotal(record))}
                                                             </td>
+
                                                             <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">
                                                                 {formatMoney(getEconomicTotal(record))}
                                                             </td>
+
                                                             <td className="px-5 py-4 text-center">
                                                                 <button
                                                                     type="button"
-                                                                    title={`View RMUC for ${record.evaluation_year}`}
-                                                                    onClick={() => openSavedRMUCAnalysis(record)}
+                                                                    title={`View RMUC for ${getEvaluationYear(record)}`}
+                                                                    onClick={() =>
+                                                                        openSavedRMUCAnalysis(record)
+                                                                    }
                                                                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                                                                 >
                                                                     <FaEye />
@@ -1242,10 +1562,17 @@ export default function CostComponents({
 
                                 <div className="mt-4 flex gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
                                     <FaInfoCircle className="mt-0.5 shrink-0 text-amber-700" />
+
                                     <div className="text-xs leading-5 text-amber-900">
-                                        <p className="font-bold">RMUC evaluation records</p>
+                                        <p className="font-bold">
+                                            RMUC evaluation records
+                                        </p>
+
                                         <p className="mt-1">
-                                            RMUC records are displayed for the selected subproject. Ensure the backend returns records filtered by that subproject.
+                                            RMUC records are displayed for
+                                            the selected subproject. Ensure
+                                            the backend returns records
+                                            filtered by that subproject.
                                         </p>
                                     </div>
                                 </div>
@@ -1253,17 +1580,211 @@ export default function CostComponents({
                         )}
 
                         {/* =================================================
-                            OTHER COST CATEGORIES
-                            RMUC IS EXCLUDED HERE TO AVOID DUPLICATE UI.
+                            04 — ANNUAL MAINTENANCE COST
+                            USES THE SELECTED RMUC RECORD
                         ================================================= */}
-                        {(currentTab.id === "annual-maintenance" ||
-                            currentTab.id === "investment-cost") && (
+
+                        {currentTab.id === "annual-maintenance" && (
+                            <div className="p-5 sm:p-6">
+                                <div className="mb-5 flex items-start gap-3">
+                                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-xl text-violet-700">
+                                        <FaTools />
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-lg font-extrabold text-slate-900">
+                                            Annual Maintenance Cost
+                                        </h3>
+
+                                        <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                                            Select an RMUC record to open
+                                            the corresponding Annual
+                                            Maintenance Cost evaluation.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!hasSelectedSubproject ? (
+                                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+                                        <FaInfoCircle className="mx-auto text-2xl text-amber-600" />
+
+                                        <p className="mt-3 font-bold text-amber-900">
+                                            No subproject selected
+                                        </p>
+
+                                        <p className="mt-1 text-sm text-amber-800">
+                                            Select a subproject to view
+                                            its Road Maintenance Unit
+                                            Cost records.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="mb-5 grid gap-4 sm:grid-cols-2">
+                                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-xs font-bold uppercase tracking-wider text-amber-700">
+                                                            RMUC Records
+                                                        </p>
+
+                                                        <p className="mt-2 text-2xl font-black text-amber-900">
+                                                            {savedRMUCAnalyses.length}
+                                                        </p>
+
+                                                        <p className="mt-1 text-xs text-amber-700">
+                                                            Saved road maintenance evaluations
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl text-amber-700 shadow-sm">
+                                                        <FaRoad />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <p className="text-xs font-bold uppercase tracking-wider text-violet-700">
+                                                            Available AMC Evaluations
+                                                        </p>
+
+                                                        <p className="mt-2 text-2xl font-black text-violet-900">
+                                                            {savedRMUCAnalyses.length}
+                                                        </p>
+
+                                                        <p className="mt-1 text-xs text-violet-700">
+                                                            RMUC records available to open
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-xl text-violet-700 shadow-sm">
+                                                        <FaCalculator />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="overflow-hidden rounded-xl border border-slate-200">
+                                            <div className="flex flex-col justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center">
+                                                <div>
+                                                    <h4 className="font-extrabold text-slate-900">
+                                                        Road Maintenance Cost Records
+                                                    </h4>
+
+                                                    <p className="mt-1 text-xs text-slate-500">
+                                                        Select the eye icon to open
+                                                        the Annual Maintenance
+                                                        Cost evaluation.
+                                                    </p>
+                                                </div>
+
+                                                <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">
+                                                    <FaTools />
+                                                    AMC Evaluation
+                                                </span>
+                                            </div>
+
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full min-w-[850px] border-collapse text-left">
+                                                    <thead>
+                                                        <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                                                            <th className="border-b px-5 py-4">No.</th>
+                                                            <th className="border-b px-5 py-4">Evaluation Year</th>
+                                                            <th className="border-b px-5 py-4">RMUC Financial Total</th>
+                                                            <th className="border-b px-5 py-4">RMUC Economic Total</th>
+                                                            <th className="border-b px-5 py-4 text-center">Action</th>
+                                                        </tr>
+                                                    </thead>
+
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {savedRMUCAnalyses.length === 0 ? (
+                                                            <EmptyTable
+                                                                colSpan={5}
+                                                                title="No Road Maintenance Cost records found"
+                                                                description="Save an RMUC evaluation first. Its record will appear here."
+                                                            />
+                                                        ) : (
+                                                            savedRMUCAnalyses.map((record, index) => (
+                                                                <tr
+                                                                    key={getRecordKey(record, index)}
+                                                                    className="transition hover:bg-violet-50/40"
+                                                                >
+                                                                    <td className="px-5 py-4 text-sm text-slate-500">
+                                                                        {index + 1}
+                                                                    </td>
+
+                                                                    <td className="px-5 py-4">
+                                                                        <span className="inline-flex rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-bold text-violet-800">
+                                                                            {formatYear(getEvaluationYear(record))}
+                                                                        </span>
+                                                                    </td>
+
+                                                                    <td className="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-700">
+                                                                        {formatMoney(getFinancialTotal(record))}
+                                                                    </td>
+
+                                                                    <td className="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-700">
+                                                                        {formatMoney(getEconomicTotal(record))}
+                                                                    </td>
+
+                                                                    <td className="px-5 py-4 text-center">
+                                                                        <button
+                                                                            type="button"
+                                                                            title={`Open AMC evaluation for ${getEvaluationYear(record)}`}
+                                                                            aria-label={`Open AMC evaluation for ${getEvaluationYear(record)}`}
+                                                                            onClick={() =>
+                                                                                openSavedAMCAnalysis(record)
+                                                                            }
+                                                                            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-violet-200 bg-violet-50 text-violet-700 transition hover:border-violet-300 hover:bg-violet-100 hover:shadow-sm"
+                                                                        >
+                                                                            <FaEye />
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 flex gap-3 rounded-xl border border-violet-100 bg-violet-50 p-4">
+                                            <FaInfoCircle className="mt-0.5 shrink-0 text-violet-700" />
+
+                                            <div className="text-xs leading-5 text-violet-900">
+                                                <p className="font-bold">
+                                                    How Annual Maintenance Cost works
+                                                </p>
+
+                                                <p className="mt-1">
+                                                    The records displayed above
+                                                    come from the Road Maintenance
+                                                    Unit Cost evaluations for
+                                                    the selected subproject.
+                                                    Click the eye icon to open
+                                                    ModalAMC using that specific
+                                                    RMUC record and evaluation year.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* =================================================
+                            05 — INVESTMENT COST
+                        ================================================= */}
+
+                        {currentTab.id === "investment-cost" && (
                             <div className="p-5 sm:p-6">
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-7">
                                     <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
                                         <div className="flex items-start gap-4">
                                             <div
-                                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl ${colorStyles[currentTab.color].icon}`}
+                                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl ${COLOR_STYLES[currentTab.color].icon}`}
                                             >
                                                 <CurrentIcon />
                                             </div>
@@ -1272,18 +1793,22 @@ export default function CostComponents({
                                                 <h3 className="text-lg font-extrabold text-slate-900">
                                                     {currentTab.label}
                                                 </h3>
+
                                                 <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
-                                                    Open this category's input form to enter cost parameters.
+                                                    Open this category's input
+                                                    form to enter cost parameters.
                                                 </p>
                                             </div>
                                         </div>
 
                                         <button
                                             type="button"
-                                            onClick={() => openCostModal(currentTab)}
-                                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white hover:bg-blue-900"
+                                            onClick={() =>
+                                                openNewModal("investment-cost")
+                                            }
+                                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-900"
                                         >
-                                            <FaCalculator />
+                                            <FaPlus />
                                             Open Input Form
                                         </button>
                                     </div>
@@ -1292,11 +1817,15 @@ export default function CostComponents({
                         )}
                     </section>
 
-                    {/* FOOTER */}
+                    {/* =================================================
+                        FOOTER
+                    ================================================= */}
+
                     <footer className="flex flex-col justify-between gap-2 px-1 pb-3 text-xs text-slate-400 sm:flex-row sm:items-center">
                         <p>
                             MIADP Economic and Financial Decision Support System
                         </p>
+
                         <p className="inline-flex items-center gap-2">
                             <FaCheckCircle className="text-emerald-500" />
                             Infrastructure Cost Evaluation
@@ -1306,31 +1835,40 @@ export default function CostComponents({
             </div>
 
             {/* =========================================================
-                MODALS
+                MODAL COMPONENTS
             ========================================================= */}
+
             {modalOpen && editingTab && (
                 <>
+                    {/* ECONOMIC COST OF SUBPROJECT */}
+
                     {editingTab.id === "economic-cost" && (
                         <ModalECOF
                             key={
                                 modalAnalysis
-                                    ? `ecos-saved-${modalAnalysis.id ?? modalAnalysis.evaluation_year}`
-                                    : `ecos-new-${selectedSubproject?.subproject_id}-${currentYear}`
+                                    ? `ecos-saved-${modalAnalysis.id ?? getEvaluationYear(modalAnalysis)}`
+                                    : `ecos-new-${subprojectId}-${CURRENT_YEAR}`
                             }
                             show={modalOpen}
                             subproject={selectedSubproject}
                             savedAnalysis={modalAnalysis}
+                            evaluation_year={
+                                modalAnalysis?.evaluation_year ??
+                                CURRENT_YEAR
+                            }
                             onSave={handleSubmitEconomicCost}
                             onClose={closeModal}
                         />
                     )}
 
+                    {/* SAFEGUARD-RELATED COST */}
+
                     {editingTab.id === "safeguard-cost" && (
                         <ModalSRC
                             key={
                                 modalAnalysis
-                                    ? `src-saved-${modalAnalysis.id ?? modalAnalysis.evaluation_year}`
-                                    : `src-new-${selectedSubproject?.subproject_id}-${currentYear}`
+                                    ? `src-saved-${modalAnalysis.id ?? getEvaluationYear(modalAnalysis)}`
+                                    : `src-new-${subprojectId}-${CURRENT_YEAR}`
                             }
                             isOpen={modalOpen}
                             subproject={selectedSubproject}
@@ -1339,30 +1877,47 @@ export default function CostComponents({
                             onClose={closeModal}
                         />
                     )}
-                    
+
+                    {/* ROAD MAINTENANCE UNIT COST */}
+
                     {editingTab.id === "road-maintenance" && (
                         <ModalRMUC
                             key={
                                 modalAnalysis
-                                    ? `rmuc-saved-${modalAnalysis.id ?? modalAnalysis.evaluation_year}`
-                                    : `rmuc-new-${selectedSubproject?.subproject_id}-${currentYear}`
+                                    ? `rmuc-saved-${modalAnalysis.rmuc_id ?? modalAnalysis.id ?? getEvaluationYear(modalAnalysis)}`
+                                    : `rmuc-new-${subprojectId}-${CURRENT_YEAR}`
                             }
                             isOpen={modalOpen}
                             subproject={selectedSubproject}
                             savedAnalysis={modalAnalysis}
-                            onClose={closeModal}
-                            onSave={handleSubmitRMUC}
                             evaluation_year={
-                                modalAnalysis?.evaluation_year ?? currentYear
+                                modalAnalysis?.evaluation_year ??
+                                CURRENT_YEAR
                             }
+                            onSave={handleSubmitRMUC}
+                            onClose={closeModal}
                         />
                     )}
-                
 
-                    {(editingTab.id === "annual-maintenance" ||
-                        editingTab.id === "investment-cost") && (
+                    {/* ANNUAL MAINTENANCE COST */}
+
+                    {editingTab.id === "annual-maintenance" && (
+                        <ModalAMC
+                            key={`amc-${subprojectId}-${modalAnalysis?.rmuc_id ?? modalAnalysis?.id ?? getEvaluationYear(modalAnalysis ?? {})}`}
+                            isOpen={modalOpen}
+                            subproject={selectedSubproject}
+                            savedAnalysis={modalAnalysis}
+                            rmucAnalyses={savedRMUCAnalyses}
+                            evaluation_year={getEvaluationYear(modalAnalysis)}
+                            onSave={handleSubmitAMC}
+                            onClose={closeModal}
+                        />
+                    )}
+
+                    {/* INVESTMENT COST */}
+
+                    {editingTab.id === "investment-cost" && (
                         <GenericCostModal
-                            key={editingTab.id}
                             tab={editingTab}
                             onClose={closeModal}
                         />
