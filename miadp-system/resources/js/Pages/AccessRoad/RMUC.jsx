@@ -25,7 +25,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 const DEFAULT_FACTORS = {
     equipment: "1.05",
     materials: "1.20",
-    skilledLabor: "1.00",
+    skilledLabor: "1.05",
     unskilledLabor: "0.60",
 };
 
@@ -37,11 +37,32 @@ const COST_FIELDS = [
 ];
 
 const FACTOR_FIELDS = [
-    { key: "equipment", label: "Equipment Factor" },
-    { key: "materials", label: "Materials Factor" },
-    { key: "skilledLabor", label: "Skilled Labor Factor" },
-    { key: "unskilledLabor", label: "Unskilled Labor Factor" },
+    { key: "equipment", label: "Equipment Conversion", },
+    { key: "skilledLabor", label: "Skilled Labor Conversion" },
+    { key: "materials", label: "Materials Conversion" },
+    { key: "unskilledLabor", label: "Unskilled Labor Conversion" },
 ];
+
+// Source: supplied Table 3a screenshot. These are displayed financial inputs,
+// not a claim that the source worksheet's inconsistent totals are correct.
+const TABLE_3A_ACTIVITIES = [
+    ["Activity 1: Pavement Patching & Repair. (crack sealing PCCP)", 0, 0, 0, 9347.52],
+    ["Activity 2: Clean Culverts including Inlets and Outlets", 0, 0, 0, 6231.52],
+    ["Activity 5: Clean Side Drains and Excavation to Original Size", 1168.44, 0, 0, 4673.76],
+    ["Activity 6: Repair/Construct Scour Checks", 2336.88, 0, 0, 7789.60],
+    ["Activity 9: Repair Shoulder and Slope Erosion", 8692, 10396.10, 0, 2970.31],
+    ["Activity 11: Cut Grass, shrubs", 0, 0, 0, 9347.52],
+    ["Activity 13: Application of sealant on concrete joints and cracks", 7000.62, 3500.31, 0, 1750.15],
+    ["Activity 14: Maintenance of road signs", 4000, 13000, 0, 6500],
+];
+const EXCEL_REPORTED_FINANCIAL_TOTAL = 98710;
+const EXCEL_REPORTED_ECONOMIC_TOTAL = 68500;
+const loadTable3A = () => TABLE_3A_ACTIVITIES.map(([title, equipment, materials, skilledLabor, unskilledLabor], i) => ({
+    id: i + 1, title,
+    equipment: String(equipment), materials: String(materials),
+    skilledLabor: String(skilledLabor), unskilledLabor: String(unskilledLabor),
+}));
+const roundMoney = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 const createActivity = (id = 1) => ({
     id,
@@ -69,7 +90,7 @@ const numericValue = (value) => {
     return Number.isFinite(number) ? number : 0;
 };
 
-const calculateEconomicCost = (financialCost, factor) => {
+const calculateEconomicCost = (financialCost, factor, category) => {
     const financial = numericValue(financialCost);
     const conversion = Number(factor);
 
@@ -81,7 +102,11 @@ const calculateEconomicCost = (financialCost, factor) => {
         return 0;
     }
 
-    return financial / conversion;
+    // Consistent system convention: divide equipment, materials and skilled labor;
+    // multiply unskilled labor by its conversion factor.
+    return category === "unskilledLabor"
+        ? financial * conversion
+        : financial / conversion;
 };
 
 const calculateFinancialTotal = (activity) =>
@@ -96,7 +121,8 @@ const calculateEconomicBreakdown = (activity, factors) =>
             field.key,
             calculateEconomicCost(
                 activity[field.key],
-                factors[field.key]
+                factors[field.key],
+                field.key
             ),
         ])
     );
@@ -693,8 +719,8 @@ export default function ModalRMUC({
                 };
             }),
 
-            totalFinancialCost: totals.financial,
-            totalEconomicCost: totals.economic,
+            totalFinancialCost: roundMoney(totals.financial),
+            totalEconomicCost: roundMoney(totals.economic),
         };
 
         try {
@@ -857,7 +883,7 @@ export default function ModalRMUC({
                                     icon={FaCalculator}
                                     label="Total Economic Cost"
                                     value={formatCurrency(totals.economic)}
-                                    description="Calculated using conversion factors"
+                                    description="Sum of converted category costs"
                                     theme="emerald"
                                 />
 
@@ -884,10 +910,9 @@ export default function ModalRMUC({
                                             </h2>
 
                                             <p className="mt-1 text-sm leading-5 text-slate-600">
-                                                These factors are editable.
-                                                Confirm the appropriate
-                                                values against your official
-                                                MIADP evaluation guidelines.
+                                                Divide equipment, materials, and skilled labor costs by their factors.
+                                                Multiply unskilled labor cost by its factor. Add the four converted amounts for Total Economic Cost.
+                                                Factors remain editable for your evaluation.
                                             </p>
                                         </div>
                                     </div>
@@ -930,18 +955,64 @@ export default function ModalRMUC({
 
                                     <div className="text-sm leading-6 text-blue-950">
                                         <p className="font-extrabold">
-                                            Economic Cost = Financial Cost ÷
-                                            Conversion Factor
+                                            Equipment, Materials &amp; Skilled Labor: Financial Cost ÷ Factor
                                         </p>
 
                                         <p className="mt-1 text-blue-900">
-                                            Financial cost totals combine all
-                                            four categories. Economic cost
-                                            totals combine the four converted
-                                            values for each activity.
+                                            Unskilled Labor: Financial Cost × {factors.unskilledLabor || "—"} (editable factor).
+                                            Total Economic Cost = Equipment Economic Cost + Materials Economic Cost + Skilled Labor Economic Cost + Unskilled Labor Economic Cost.
                                         </p>
                                     </div>
                                 </div>
+
+                                {/* LIVE ECONOMIC COST BREAKDOWN */}
+                                <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 sm:p-5">
+                                    <div className="mb-3 flex items-center gap-2 text-sm font-extrabold text-emerald-950">
+                                        <FaCalculator /> Converted Cost Summary
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                        {FACTOR_FIELDS.map((field) => (
+                                            <div key={field.key} className="rounded-xl border border-emerald-100 bg-white p-3">
+                                                <p className="text-xs font-bold text-slate-600">{field.label}</p>
+                                                <p className="mt-1 text-xs text-slate-500">
+                                                    Financial cost {field.key === "unskilledLabor" ? "×" : "÷"} {factors[field.key] || "—"}
+                                                </p>
+                                                <p className="mt-2 text-lg font-black tabular-nums text-emerald-900">
+                                                    {formatCurrency(totals[field.key])}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-200 pt-3">
+                                        <span className="text-sm font-extrabold text-emerald-950">
+                                            Total Economic Cost = Sum of all converted categories
+                                        </span>
+                                        <span className="text-xl font-black tabular-nums text-emerald-950">
+                                            {formatCurrency(totals.economic)}
+                                        </span>
+                                    </div>
+                                </section>
+
+                                {/* Source worksheet reconciliation: only for exact matching sample inputs */}
+                                {activities.length === TABLE_3A_ACTIVITIES.length && activities.every((a, i) =>
+                                    a.title.trim() === TABLE_3A_ACTIVITIES[i][0] &&
+                                    COST_FIELDS.every((f, j) => Math.abs(numericValue(a[f.key]) - TABLE_3A_ACTIVITIES[i][j + 1]) < 0.005)
+                                ) && (
+                                    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                                        <h2 className="text-sm font-extrabold text-slate-900">Table 3a — Source Worksheet Reconciliation</h2>
+                                        <p className="mt-1 text-xs leading-5 text-slate-600">The source worksheet reports totals that do not reconcile with its displayed activity inputs. Differences below are informational, not added to your saved totals. Its economic total also omits the blank Activity 13 economic row and has inconsistent material conversions.</p>
+                                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                                                <p className="font-semibold text-slate-600">Financial: Excel reported {formatCurrency(EXCEL_REPORTED_FINANCIAL_TOTAL)}</p>
+                                                <p className="mt-1 font-extrabold text-slate-900">Calculated {formatCurrency(totals.financial)} · Difference {formatCurrency(roundMoney(totals.financial - EXCEL_REPORTED_FINANCIAL_TOTAL))}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                                                <p className="font-semibold text-slate-600">Economic: Excel reported {formatCurrency(EXCEL_REPORTED_ECONOMIC_TOTAL)}</p>
+                                                <p className="mt-1 font-extrabold text-slate-900">Calculated {formatCurrency(totals.economic)} · Difference {formatCurrency(roundMoney(totals.economic - EXCEL_REPORTED_ECONOMIC_TOTAL))}</p>
+                                            </div>
+                                        </div>
+                                    </section>
+                                )}
 
                                 {/* MAINTENANCE ACTIVITIES */}
                                 <section>
@@ -966,6 +1037,21 @@ export default function ModalRMUC({
                                             </p>
                                         </div>
 
+                                        <div className="flex flex-wrap gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (activities.some((a) => a.title.trim() || COST_FIELDS.some((f) => numericValue(a[f.key]) !== 0)) && !window.confirm("Replace current activities with the eight Table 3a example activities?")) return;
+                                                setActivities(loadTable3A());
+                                                setNextId(9);
+                                                setFactors({ ...DEFAULT_FACTORS });
+                                                setError("");
+                                                setMessage("Table 3a inputs loaded. Review the calculations before saving.");
+                                            }}
+                                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-extrabold text-amber-800 transition hover:bg-amber-50"
+                                        >
+                                            <FaClipboardCheck /> Load Table 3a
+                                        </button>
                                         <button
                                             type="button"
                                             onClick={addActivity}
@@ -974,6 +1060,7 @@ export default function ModalRMUC({
                                             <FaPlus />
                                             Add Activity
                                         </button>
+                                        </div>
                                     </div>
 
                                     {/* COST TABLE */}
@@ -1234,8 +1321,8 @@ export default function ModalRMUC({
 
                                         <p>
                                             Financial costs are editable.
-                                            Economic costs and totals are
-                                            calculated automatically for
+                                            Economic costs are calculated by multiplication,
+                                            and totals update automatically for
                                             evaluation year{" "}
                                             {evaluationYear || "—"}. Use
                                             horizontal scrolling to view

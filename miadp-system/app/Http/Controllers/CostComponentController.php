@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AMC;
 use App\Models\ECOS;
-use App\Models\SRC;
+use App\Models\IMC;
 use App\Models\RMUC;
+use App\Models\SRC;
 use App\Models\Subproject;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -70,6 +72,7 @@ class CostComponentController extends Controller
             'safeguardCostAnalyses' => [],
             'rmucAnalyses' => [],
             'annualMaintenanceAnalyses' => [],
+            'imcAnalyses' => [],
         ]);
     }
 
@@ -101,13 +104,19 @@ class CostComponentController extends Controller
             ->orderByDesc('evaluation_year')
             ->get();
 
+        $annualMaintenanceAnalyses = AMC::query()
+            ->where('subproject_id', $subprojectId)
+            ->orderByDesc('evaluation_year')
+            ->get();
+
         return Inertia::render('CostComponents/CostComponents', [
             'subprojects' => $this->subprojects(),
             'selectedSubproject' => $selectedSubproject,
             'economicCostAnalyses' => $economicCostAnalyses,
             'safeguardCostAnalyses' => $safeguardCostAnalyses,
             'rmucAnalyses' => $rmucAnalyses,
-            'annualMaintenanceAnalyses' => [],
+            'annualMaintenanceAnalyses' => $annualMaintenanceAnalyses,
+            'imcAnalyses' => IMC::where('subproject_id', $subprojectId)->orderByDesc('evaluation_year')->get(),
         ]);
     }
 
@@ -504,7 +513,7 @@ class CostComponentController extends Controller
                     $skilledLabor / (float) $factors['skilledLabor'];
 
                 $economicUnskilledLabor =
-                    $unskilledLabor / (float) $factors['unskilledLabor'];
+                    $unskilledLabor * (float) $factors['unskilledLabor'];
 
                 $economic = $economicEquipment
                     + $economicMaterials
@@ -534,6 +543,18 @@ class CostComponentController extends Controller
             })
             ->values()
             ->all();
+
+        // Save the GRAND TOTALS shown in the modal, rounded to two decimals.
+        // Verify that submitted totals agree with server calculations.
+        $financialTotal = round($financialTotal, 2);
+        $economicTotal = round($economicTotal, 2);
+
+        if (abs($financialTotal - (float) $validated['totalFinancialCost']) > 0.01
+            || abs($economicTotal - (float) $validated['totalEconomicCost']) > 0.01) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'totalFinancialCost' => 'The submitted totals do not match the calculated maintenance costs. Please refresh and try again.',
+            ]);
+        }
 
         DB::transaction(function () use (
             $selectedSubproject,
@@ -577,4 +598,120 @@ class CostComponentController extends Controller
             ->orderByDesc('evaluation_year')
             ->get();
     }
+
+    /*
+     |--------------------------------------------------------------------------
+     | ANNUAL MAINTENANCE COST (AMC)
+     |--------------------------------------------------------------------------
+     */
+
+    public function storeAMC(
+        Request $request,
+        string|int $subproject
+    ): RedirectResponse {
+        $selectedSubproject = $this->findSubproject($subproject);
+
+        $validated = $request->validate([
+            'evaluation_year' => ['required', 'integer', 'between:1900,9999'],
+            'total_annual_maintenance_cost_economic' => [
+                'required',
+                'numeric',
+                'min:0',
+            ],
+        ]);
+
+        // The subproject ID comes from the route, not the request body.
+        // Calculate the first-year economic AMC from the matching RMUC.
+        $rmuc = RMUC::query()
+            ->where('subproject_id', $selectedSubproject->subproject_id)
+            ->where('evaluation_year', $validated['evaluation_year'])
+            ->firstOrFail();
+
+        // Preserve the existing first-year AMC multiplier.
+        $firstYearEconomic = round(
+            (float) $rmuc->total_economic_cost * 7.9,
+            2
+        );
+
+        DB::transaction(function () use (
+            $selectedSubproject,
+            $validated,
+            $firstYearEconomic
+        ) {
+            AMC::updateOrCreate(
+                [
+                    'subproject_id' => $selectedSubproject->subproject_id,
+                    'evaluation_year' => (int) $validated['evaluation_year'],
+                ],
+                [
+                    'total_annual_maintenance_cost_economic' => $firstYearEconomic,
+                ]
+            );
+        });
+
+        return redirect()
+            ->back()
+            ->with('success', 'First-year economic AMC saved successfully.');
+    }
+    /**
+     * Save the 21-year IMC schedule from authoritative ECOS and AMC values.
+     * A subproject + evaluation year has exactly one IMC record.
+     */
+    public function storeIMC(Request $request, string|int $subproject): RedirectResponse
+    {
+        $selectedSubproject = $this->findSubproject($subproject);
+        $validated = $request->validate([
+            'evaluation_year' => ['required', 'integer', 'between:2000,2100'],
+        ]);
+
+        $subprojectId = $selectedSubproject->subproject_id;
+        $year = (int) $validated['evaluation_year'];
+        $ecos = ECOS::where('subproject_id', $subprojectId)
+            ->where('evaluation_year', $year)->first();
+        $amc = AMC::where('subproject_id', $subprojectId)
+            ->where('evaluation_year', $year)->first();
+
+        if (!$ecos || !$amc) {
+            return redirect()->back()->withErrors([
+                'evaluation_year' => 'Save both ECOS and AMC for this subproject and evaluation year before saving IMC.',
+            ]);
+        }
+
+        $economicTotal = data_get($ecos->calculations, 'economicTotal');
+        $maintenanceTotal = $amc->total_annual_maintenance_cost_economic;
+        if (!is_numeric($economicTotal) || !is_numeric($maintenanceTotal)
+            || $economicTotal < 0 || $maintenanceTotal < 0) {
+            return redirect()->back()->withErrors([
+                'evaluation_year' => 'The matching ECOS/AMC economic costs are missing or invalid.',
+            ]);
+        }
+
+        $investment = round((float) $economicTotal, 2);
+        $maintenance = round((float) $maintenanceTotal, 2);
+        $schedule = [];
+        for ($i = 0; $i <= 20; $i++) {
+            $investmentCost = $i === 0 ? $investment : 0;
+            $operatingCost = $i === 0 ? 0 : $maintenance;
+            $schedule[] = [
+                'year' => $i,
+                'calendarYear' => $year + $i,
+                'investment' => $investmentCost,
+                'operating' => $operatingCost,
+                'total' => round($investmentCost + $operatingCost, 2),
+            ];
+        }
+
+        IMC::updateOrCreate(
+            ['subproject_id' => $subprojectId, 'evaluation_year' => $year],
+            [
+                'investment_economic_cost' => $investment,
+                'annual_maintenance_economic_cost' => $maintenance,
+                'total_20_year_cost' => round($investment + $maintenance * 20, 2),
+                'yearly_costs' => $schedule,
+            ]
+        );
+
+        return redirect()->back()->with('success', 'Investment and Maintenance Cost saved successfully.');
+    }
+
 }

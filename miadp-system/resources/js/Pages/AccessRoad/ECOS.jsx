@@ -23,6 +23,8 @@ const INITIAL_VALUES = {
     materials: "",
     equipment: "",
     subtotalLabor: "",
+    skilledLabor: "",
+    unskilledLabor: "",
     ocm: "",
     contractorProfit: "",
     taxes: "",
@@ -35,16 +37,11 @@ const INITIAL_VALUES = {
 const COST_FIELDS = [
     { key: "materials", label: "Materials", code: "A" },
     { key: "equipment", label: "Equipment", code: "B" },
-    { key: "subtotalLabor", label: "Subtotal Labor", code: "C" },
+    { key: "skilledLabor", label: "Skilled Labor", code: "C1" },
+    { key: "unskilledLabor", label: "Unskilled Labor", code: "C2" },
     { key: "ocm", label: "Other Costs of Maintenance (OCM)", code: "D" },
     { key: "contractorProfit", label: "Contractor's Profit", code: "E" },
     { key: "taxes", label: "Taxes", code: "F" },
-    { key: "preEngineering", label: "Pre-engineering", code: "G" },
-    {
-        key: "engineeringSupervision",
-        label: "Engineering Supervision",
-        code: "H",
-    },
     { key: "safeguardFinancialCost", label: "Safeguards Financial Cost", code: "I" },
     { key: "safeguardEconomicCost", label: "Safeguards Economic Cost", code: "I" },
 ];
@@ -53,6 +50,12 @@ const toNumber = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const formatRoundedCurrency = (value) =>
+    new Intl.NumberFormat("en-PH", {
+        style: "currency", currency: "PHP",
+        minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(Math.round(toNumber(value)));
 
 const formatCurrency = (value) =>
     new Intl.NumberFormat("en-PH", {
@@ -301,6 +304,12 @@ export default function ModalECOF({
                             : INITIAL_VALUES[key]),
                 ]),
             ),
+            // Older ECOS records stored only a subtotal. Preserve their original
+            // 60/40 assumption until the user enters the actual labor amounts.
+            skilledLabor: savedInputs.skilledLabor ??
+                (savedInputs.subtotalLabor != null ? toNumber(savedInputs.subtotalLabor) * 0.6 : ""),
+            unskilledLabor: savedInputs.unskilledLabor ??
+                (savedInputs.subtotalLabor != null ? toNumber(savedInputs.subtotalLabor) * 0.4 : ""),
             evaluationYear: String(
                 savedAnalysis?.evaluation_year ??
                     savedInputs.evaluationYear ??
@@ -326,14 +335,20 @@ export default function ModalECOF({
     const result = useMemo(() => {
         const materials = toNumber(values.materials);
         const equipment = toNumber(values.equipment);
-        const subtotalLabor = toNumber(values.subtotalLabor);
+        const skilledLabor = toNumber(values.skilledLabor);
+        const unskilledLabor = toNumber(values.unskilledLabor);
+        const subtotalLabor = skilledLabor + unskilledLabor;
         const ocm = toNumber(values.ocm);
         const contractorProfit = toNumber(values.contractorProfit);
         const taxes = toNumber(values.taxes);
+        // Workbook rows 23-24: each is 5% of financial direct cost,
+        // plus 12% VAT in the financial column only.
+        const financialDirectCost = materials + equipment + subtotalLabor;
         const preEngineering = toNumber(values.preEngineering);
-        const engineeringSupervision = toNumber(
-            values.engineeringSupervision,
-        );
+        const engineeringSupervision = toNumber(values.engineeringSupervision);
+        // Financial input includes 12% VAT; remove VAT for economic cost.
+        const economicPreEngineering = preEngineering / 1.12;
+        const economicEngineeringSupervision = engineeringSupervision / 1.12;
         const safeguardFinancialCost = toNumber(values.safeguardFinancialCost);
         const safeguardEconomicCost = toNumber(values.safeguardEconomicCost);
 
@@ -346,17 +361,12 @@ export default function ModalECOF({
         const economicMaterials =
             economicForeignMaterials + economicLocalMaterials;
 
-        // Labor: 60% skilled and 40% unskilled.
-        const skilledLabor = subtotalLabor * 0.6;
-        const unskilledLabor = subtotalLabor * 0.4;
+        // Labor values are entered independently, as in Excel rows 12-14.
         const economicSkilledLabor = skilledLabor;
         const economicUnskilledLabor =
             unskilledLabor * UNSKILLED_FACTOR;
         const economicLabor =
             economicSkilledLabor + economicUnskilledLabor;
-
-        const financialDirectCost =
-            materials + equipment + subtotalLabor;
 
         const economicDirectCost =
             economicMaterials + equipment + economicLabor;
@@ -377,8 +387,8 @@ export default function ModalECOF({
         // Taxes are excluded from economic cost.
         const economicTotal =
             economicDirectOcmProfit +
-            preEngineering +
-            engineeringSupervision +
+            economicPreEngineering +
+            economicEngineeringSupervision +
             safeguardEconomicCost;
 
         return {
@@ -404,6 +414,9 @@ export default function ModalECOF({
             taxes,
             preEngineering,
             engineeringSupervision,
+            economicPreEngineering,
+            economicEngineeringSupervision,
+            totalProjectCostPow: Math.ceil((financialDirectOcmProfit + taxes) / 1000) * 1000,
             safeguardFinancialCost,
             safeguardEconomicCost,
             financialTotal,
@@ -514,15 +527,15 @@ export default function ModalECOF({
                 "I",
                 "Pre-engineering",
                 result.preEngineering,
-                "1.00",
-                result.preEngineering,
+                "User-entered financial / 1.12 economic",
+                result.economicPreEngineering,
             ],
             [
                 "J",
                 "Engineering Supervision",
                 result.engineeringSupervision,
-                "1.00",
-                result.engineeringSupervision,
+                "User-entered financial / 1.12 economic",
+                result.economicEngineeringSupervision,
             ],
             [
                 "K",
@@ -531,6 +544,7 @@ export default function ModalECOF({
                 "1.00",
                 result.safeguardEconomicCost,
             ],
+            ["POW", "TPC POW (rounded to nearest 1,000 up)", result.totalProjectCostPow, "", ""],
             [
                 "TOTAL",
                 "Total Cost",
@@ -595,7 +609,9 @@ export default function ModalECOF({
         const numericInputs = {
             materials: toNumber(values.materials),
             equipment: toNumber(values.equipment),
-            subtotalLabor: toNumber(values.subtotalLabor),
+            subtotalLabor: result.subtotalLabor,
+            skilledLabor: result.skilledLabor,
+            unskilledLabor: result.unskilledLabor,
             ocm: toNumber(values.ocm),
             contractorProfit: toNumber(values.contractorProfit),
             taxes: toNumber(values.taxes),
@@ -756,7 +772,7 @@ export default function ModalECOF({
                                     </span>
                                 </div>
                                 <div className="mt-3 break-words text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-                                    {formatCurrency(result.financialTotal)}
+                                    {formatRoundedCurrency(result.financialTotal)}
                                 </div>
                                 <p className="mt-1 text-xs text-slate-500">
                                     Includes applicable taxes
@@ -808,9 +824,8 @@ export default function ModalECOF({
                                     </h3>
                                     <p className="mt-1 text-xs leading-5 text-blue-900/80 sm:text-sm">
                                         Materials are allocated 60% to foreign
-                                        and 40% to local components. Labor is
-                                        allocated 60% to skilled and 40% to
-                                        unskilled labor. Economic cost excludes
+                                        and 40% to local components. Skilled and unskilled labor are entered
+                                        separately. Economic cost excludes
                                         taxes, while other costs retain their
                                         financial values unless a conversion
                                         factor applies.
@@ -838,11 +853,11 @@ export default function ModalECOF({
                             <SectionHeading
                                 number="01"
                                 title="Financial Cost Inputs"
-                                description="Enter your financial cost estimates. Economic values and totals are calculated automatically."
+                                description="Enter financial costs, including pre-engineering and supervision. Economic values and totals are calculated automatically."
                             />
 
                             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {COST_FIELDS.slice(0, 3).map((field) => (
+                                {COST_FIELDS.slice(0, 4).map((field) => (
                                     <label key={field.key} className="block">
                                         <span className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-slate-700">
                                             <span>{field.label}</span>
@@ -937,20 +952,13 @@ export default function ModalECOF({
                                                 factor="× 1.00"
                                             />
                                             <CostRow
-                                                code="C"
-                                                label="Subtotal Labor"
-                                                description="Total labor cost"
-                                                financial={result.subtotalLabor}
-                                                economic={result.economicLabor}
-                                                input
-                                                inputValue={values.subtotalLabor}
-                                                onInputChange={(value) => setNamedValue("subtotalLabor", value)}
-                                            />
-                                            <CostRow
                                                 code="C1"
                                                 label="Skilled Labor"
                                                 financial={result.skilledLabor}
                                                 economic={result.economicSkilledLabor}
+                                                input
+                                                inputValue={values.skilledLabor}
+                                                onInputChange={(value) => setNamedValue("skilledLabor", value)}
                                                 factor="× 1.00"
                                                 indent
                                             />
@@ -959,6 +967,9 @@ export default function ModalECOF({
                                                 label="Unskilled Labor"
                                                 financial={result.unskilledLabor}
                                                 economic={result.economicUnskilledLabor}
+                                                input
+                                                inputValue={values.unskilledLabor}
+                                                onInputChange={(value) => setNamedValue("unskilledLabor", value)}
                                                 factor="× 0.60"
                                                 indent
                                             />
@@ -1015,23 +1026,23 @@ export default function ModalECOF({
                                             />
                                             <CostRow
                                                 code="I"
-                                                label="Pre-engineering"
+                                                label="Pre-engineering Activities"
                                                 financial={result.preEngineering}
-                                                economic={result.preEngineering}
+                                                economic={result.economicPreEngineering}
                                                 input
                                                 inputValue={values.preEngineering}
                                                 onInputChange={(value) => setNamedValue("preEngineering", value)}
-                                                factor="× 1.00"
+                                                factor="÷ 1.12 (remove VAT)"
                                             />
                                             <CostRow
                                                 code="J"
                                                 label="Engineering Supervision"
                                                 financial={result.engineeringSupervision}
-                                                economic={result.engineeringSupervision}
+                                                economic={result.economicEngineeringSupervision}
                                                 input
                                                 inputValue={values.engineeringSupervision}
                                                 onInputChange={(value) => setNamedValue("engineeringSupervision", value)}
-                                                factor="× 1.00"
+                                                factor="÷ 1.12 (remove VAT)"
                                             />
                                             <CostRow
                                                 code="K"
@@ -1090,7 +1101,7 @@ export default function ModalECOF({
                                         Financial Project Cost
                                     </div>
                                     <div className="mt-3 break-words text-2xl font-bold text-blue-950 sm:text-3xl">
-                                        {formatCurrency(result.financialTotal)}
+                                        {formatRoundedCurrency(result.financialTotal)}
                                     </div>
                                     <p className="mt-2 text-xs leading-5 text-blue-900/70">
                                         Includes materials, equipment, labor,

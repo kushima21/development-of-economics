@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
+
+
 class ManagementController extends Controller
 {
     /**
@@ -25,38 +27,52 @@ class ManagementController extends Controller
      * Display a specific management section.
      */
     public function section(
-    Request $request,
-    Subproject $subproject,
-    string $section
-): Response|RedirectResponse {
-    $allowedSections = [
-        'beneficiaries',
-        'cost-components',
-        'economic-benefits',
-        'economic-analysis',
-    ];
+        Request $request,
+        Subproject $subproject,
+        string $section
+    ): Response|RedirectResponse {
 
-    abort_unless(in_array($section, $allowedSections, true), 404);
+        $allowedSections = [
+            'beneficiaries',
+            'cost-components',
+            'economic-benefits',
+            'economic-analysis',
+        ];
 
-    // Beneficiaries has its own dedicated page.
-    if ($section === 'beneficiaries') {
-        return redirect()->route('project-beneficiaries.index', [
-            'subproject_id' => $subproject->getKey(),
-        ]);
-    }
+        abort_unless(
+            in_array($section, $allowedSections, true),
+            404
+        );
 
-    // Dedicated Economic Benefits workspace.
-    if ($section === 'economic-benefits') {
-        return Inertia::render('Manage/ManageBenefits', [
+        // Beneficiaries has its own dedicated page.
+        if ($section === 'beneficiaries') {
+            return redirect()->route(
+                'project-beneficiaries.index',
+                [
+                    'subproject_id' => $subproject->getKey(),
+                ]
+            );
+        }
+
+        // Dedicated Economic Benefits workspace.
+        if ($section === 'economic-benefits') {
+            return Inertia::render('Manage/ManageBenefits', [
+                'subproject' => $subproject,
+                'section' => $section,
+            ]);
+        }
+
+        // Dedicated Economic Analysis workspace.
+        if ($section === 'economic-analysis') {
+            return redirect()->route('economic-analysis', [
+                'subproject' => $subproject->getKey(),
+            ]);
+        }
+
+        // Other management sections.
+        return Inertia::render('Manage/Management', [
             'subproject' => $subproject,
             'section' => $section,
         ]);
     }
-
-    // Other management sections.
-    return Inertia::render('Manage/Management', [
-        'subproject' => $subproject,
-        'section' => $section,
-    ]);
-}
 }

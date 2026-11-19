@@ -127,14 +127,27 @@ class SubProjectController extends Controller
             ->with('success', 'Subproject updated successfully.');
     }
 
-    public function destroy(Subproject $subproject): RedirectResponse
-    {
+public function destroy(Subproject $subproject): RedirectResponse
+{
+    try {
         $subproject->delete();
 
         return redirect()
             ->route('subproject.index')
             ->with('success', 'Subproject deleted successfully.');
+
+    } catch (\Illuminate\Database\QueryException $e) {
+
+        report($e);
+
+        return redirect()
+            ->route('subproject.index')
+            ->with(
+                'error',
+                'Unable to delete this subproject. It may have related records.'
+            );
     }
+}
 
     private function validateSubproject(
         Request $request,

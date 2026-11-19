@@ -15,12 +15,24 @@ import {
 const DEFAULT_GROWTH_RATE = 4;
 
 const VEHICLES = [
-    { id: "car_van", label: "Car / Van" },
-    { id: "jeepney", label: "Jeepney" },
-    { id: "motorcycle", label: "Motorcycle" },
-    { id: "tricycle", label: "Tricycle" },
-    { id: "bus", label: "Bus" },
-    { id: "truck", label: "Truck" },
+    { id: "public_motorcycle", categoryId: "motorcycle", label: "Motorcycle", group: "public", groupLabel: "Public Vehicle", rateKey: "motorcycle" },
+    { id: "public_tricycle", categoryId: "tricycle", label: "Tricycle", group: "public", groupLabel: "Public Vehicle", rateKey: "tricycle" },
+    { id: "public_other_truck", categoryId: "other_truck", label: "Other (Truck)", group: "public", groupLabel: "Public Vehicle", rateKey: "truck" },
+    { id: "private_motorcycle", categoryId: "motorcycle", label: "Motorcycle", group: "private", groupLabel: "Private Vehicle", rateKey: "motorcycle" },
+    { id: "private_service_vehicle", categoryId: "service_vehicle", label: "Service Vehicle (Car, Van, SUV etc.)", group: "private", groupLabel: "Private Vehicle", rateKey: "car_van" },
+    { id: "private_pickup", categoryId: "pickup", label: "Pickup", group: "private", groupLabel: "Private Vehicle", rateKey: "car_van" },
+    { id: "private_6wheeler", categoryId: "truck_6", label: "6-wheeler Truck", group: "private", groupLabel: "Private Vehicle", rateKey: "truck" },
+    { id: "private_10wheeler", categoryId: "truck_10", label: "10-wheeler Truck", group: "private", groupLabel: "Private Vehicle", rateKey: "truck" },
+];
+
+const VEHICLE_CATEGORIES = [
+    { id: "motorcycle", label: "Motorcycle", description: "Public and private motorcycles" },
+    { id: "tricycle", label: "Tricycle", description: "Public tricycles" },
+    { id: "other_truck", label: "Other (Truck)", description: "Public trucks" },
+    { id: "service_vehicle", label: "Service Vehicle", description: "Car, van, SUV and similar" },
+    { id: "pickup", label: "Pickup", description: "Private pickup vehicles" },
+    { id: "truck_6", label: "6-wheeler Truck", description: "Private six-wheel trucks" },
+    { id: "truck_10", label: "10-wheeler Truck", description: "Private ten-wheel trucks" },
 ];
 
 const VEHICLE_TYPES = [
@@ -33,54 +45,12 @@ const VEHICLE_TYPES = [
  * Unit: PHP per kilometre per trip.
  */
 const VOC_BASE_RATES = {
-    A: {
-        car_van: 15.47,
-        jeepney: 13.62,
-        motorcycle: 2.86,
-        tricycle: 5.28,
-        bus: 30.05,
-        truck: 22.89,
-    },
-    B: {
-        car_van: 25.96,
-        jeepney: 24.97,
-        motorcycle: 7.52,
-        tricycle: 16.43,
-        bus: 64.41,
-        truck: 45.58,
-    },
-    C: {
-        car_van: 17.95,
-        jeepney: 16.31,
-        motorcycle: 3.35,
-        tricycle: 5.61,
-        bus: 38.35,
-        truck: 28.83,
-    },
-    D: {
-        car_van: 20.75,
-        jeepney: 19.59,
-        motorcycle: 3.96,
-        tricycle: 7.01,
-        bus: 50.56,
-        truck: 35.90,
-    },
-    E: {
-        car_van: 33.37,
-        jeepney: 35.44,
-        motorcycle: 8.01,
-        tricycle: 17.03,
-        bus: 97.56,
-        truck: 60.75,
-    },
-    F: {
-        car_van: 71.92,
-        jeepney: 70.91,
-        motorcycle: 21.95,
-        tricycle: 25.62,
-        bus: 132.15,
-        truck: 62.14,
-    },
+    A: { car_van: 15.4748805764988, jeepney: 13.6195352894094, motorcycle: 2.85834595768313, tricycle: 5.27955826061313, bus: 30.0493019191788, truck: 22.8859761169011 },
+    B: { car_van: 25.963524977696, jeepney: 24.9701277123053, motorcycle: 7.52445376277513, tricycle: 16.4273336580093, bus: 64.4050020479381, truck: 45.5771617161184 },
+    C: { car_van: 17.9458097706375, jeepney: 16.313660022964, motorcycle: 3.34861854247779, tricycle: 5.61073079367953, bus: 38.350815452237, truck: 28.834725750091 },
+    D: { car_van: 20.7496588569768, jeepney: 19.5857969720813, motorcycle: 3.96193250955682, tricycle: 7.01245863662057, bus: 50.5615073156771, truck: 35.9006562935267 },
+    E: { car_van: 33.3660000637827, jeepney: 35.4350878591526, motorcycle: 8.01283340322695, tricycle: 17.0288926096802, bus: 97.5594939843133, truck: 60.745995853013 },
+    F: { car_van: 71.9177912971014, jeepney: 70.9075892077518, motorcycle: 21.9486713599798, tricycle: 25.6206120707263, bus: 132.153197993593, truck: 62.1416807896956 },
 };
 
 /*
@@ -92,6 +62,7 @@ const VOC_BASE_RATES = {
  * TAB6D: E - A = Very bad gravel road
  * TAB6E: F - A = Bad earth road
  */
+
 const ROAD_SURFACES = [
     {
         id: "tab6a",
@@ -136,30 +107,31 @@ const ROAD_SURFACES = [
 ].map((surface) => ({
     ...surface,
     rates: Object.fromEntries(
-        VEHICLES.map((vehicle) => [
-            vehicle.id,
-            VOC_BASE_RATES[surface.existingCode][vehicle.id] -
-                VOC_BASE_RATES.A[vehicle.id],
+        Object.keys(VOC_BASE_RATES.A).map((rateKey) => [
+            rateKey,
+            VOC_BASE_RATES[surface.existingCode][rateKey] -
+                VOC_BASE_RATES.A[rateKey],
         ]),
     ),
 }));
+
+const getVehicleAssumptions = (vehicle) => ({
+    tripsPerDay: vehicle.categoryId === "motorcycle" ? "2" : "1",
+    operatingDays: ["motorcycle", "tricycle"].includes(vehicle.categoryId) ? "275" : "260",
+});
 
 const createTrafficData = () =>
     Object.fromEntries(
         VEHICLES.map((vehicle) => [
             vehicle.id,
-            Object.fromEntries(
-                VEHICLE_TYPES.map((type) => [
-                    type.id,
-                    {
-                        day1: "",
-                        day2: "",
-                        day3: "",
-                        tripsPerDay: "",
-                        operatingDays: "",
-                    },
-                ]),
-            ),
+            {
+                [vehicle.group]: {
+                    day1: "",
+                    day2: "",
+                    day3: "",
+                    ...getVehicleAssumptions(vehicle),
+                },
+            },
         ]),
     );
 
@@ -196,6 +168,27 @@ const numberValue = (value) => {
 
 const positiveNumber = (value) => Math.max(0, numberValue(value));
 
+/**
+ * VOH.xlsx: Sheet1!E100:G108 (traffic survey and first benefit year).
+ * F = E + (E * growthRate / tripsPerDay)
+ * G = F * (1 + growthRate)
+ * Subsequent benefit years = previous benefit year * (1 + growthRate).
+ * For the survey base year, keep E as the unadjusted average.
+ */
+const projectTrafficCount = (average, growthRate, yearsAhead, tripsPerDay) => {
+    if (yearsAhead <= 0) return average;
+    if (tripsPerDay <= 0) return 0;
+    const firstAdjusted = average + (average * growthRate) / tripsPerDay;
+    return firstAdjusted * Math.pow(1 + growthRate, yearsAhead - 1);
+};
+
+const projectVOHBenefitYearTraffic = (average, growthRate, benefitYear, tripsPerDay) => {
+    if (tripsPerDay <= 0) return 0;
+    const firstAdjusted = average + (average * growthRate) / tripsPerDay;
+    const firstBenefitYear = firstAdjusted * (1 + growthRate);
+    return firstBenefitYear * Math.pow(1 + growthRate, benefitYear - 1);
+};
+
 const hasValue = (value) =>
     value !== "" && value !== null && value !== undefined;
 
@@ -224,12 +217,27 @@ export default function ModalSVOTab1({
     onClose,
     onSave,
     initialData = null,
+    saving = false,
+    readOnly = false,
 }) {
     const [form, setForm] = useState(createForm);
     const [vocForm, setVocForm] = useState(createVOCData);
     const [errors, setErrors] = useState({});
     const [activeSection, setActiveSection] = useState("tab1");
     const [activeWorksheet, setActiveWorksheet] = useState(null);
+    const [selectedVehicleIds, setSelectedVehicleIds] = useState(["motorcycle"]);
+    const selectedVehicles = useMemo(
+        () => VEHICLES.filter((vehicle) => selectedVehicleIds.includes(vehicle.categoryId)),
+        [selectedVehicleIds],
+    );
+
+    const toggleVehicle = (vehicleId) => {
+        setSelectedVehicleIds((current) =>
+            current.includes(vehicleId)
+                ? (current.length > 1 ? current.filter((id) => id !== vehicleId) : current)
+                : [...current, vehicleId],
+        );
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -241,15 +249,15 @@ export default function ModalSVOTab1({
         const mergedTraffic = Object.fromEntries(
             VEHICLES.map((vehicle) => [
                 vehicle.id,
-                Object.fromEntries(
-                    VEHICLE_TYPES.map((type) => [
-                        type.id,
-                        {
-                            ...defaults.traffic[vehicle.id][type.id],
-                            ...(savedTraffic[vehicle.id]?.[type.id] ?? {}),
-                        },
-                    ]),
-                ),
+                {
+                    [vehicle.group]: {
+                        ...defaults.traffic[vehicle.id][vehicle.group],
+                        ...(savedTraffic[vehicle.id]?.[vehicle.group] ??
+                            savedTraffic[vehicle.categoryId]?.[vehicle.group] ??
+                            savedTraffic[vehicle.rateKey]?.[vehicle.group] ??
+                            {}),
+                    },
+                },
             ]),
         );
 
@@ -258,6 +266,10 @@ export default function ModalSVOTab1({
             ...savedForm,
             traffic: mergedTraffic,
         });
+        const savedVehicleIds = Array.isArray(savedForm.selectedVehicleIds)
+            ? savedForm.selectedVehicleIds.filter((id) => VEHICLE_CATEGORIES.some((category) => category.id === id))
+            : [];
+        setSelectedVehicleIds(savedVehicleIds.length ? savedVehicleIds : ["motorcycle"]);
 
         const defaultVOC = createVOCData();
         const savedTab2 = savedForm.tab2 ?? {};
@@ -335,107 +347,59 @@ export default function ModalSVOTab1({
      * No default values are substituted for either field.
      */
     const trafficCalculations = useMemo(() => {
-        const growthRate =
-            Math.max(0, numberValue(form.trafficGrowthRate)) / 100;
+        const growthRate = Math.max(0, numberValue(form.trafficGrowthRate)) / 100;
+        const yearDifference = Math.max(0, numberValue(form.inputYear) - numberValue(form.year1));
 
-        const yearDifference = Math.max(
-            0,
-            numberValue(form.inputYear) - numberValue(form.year1),
-        );
-
-        const vehicleRows = VEHICLES.map((vehicle) => {
-            const typeResults = {};
-
-            VEHICLE_TYPES.forEach((type) => {
-                const entry =
-                    form.traffic?.[vehicle.id]?.[type.id] ?? {};
-
-                const day1 = positiveNumber(entry.day1);
-                const day2 = positiveNumber(entry.day2);
-                const day3 = positiveNumber(entry.day3);
-
-                const average = (day1 + day2 + day3) / 3;
-
-                const projectedAADT =
-                    average * Math.pow(1 + growthRate, yearDifference);
-
-                const tripsPerDay = hasValue(entry.tripsPerDay)
-                    ? positiveNumber(entry.tripsPerDay)
-                    : null;
-
-                const operatingDays = hasValue(entry.operatingDays)
-                    ? positiveNumber(entry.operatingDays)
-                    : null;
-
-                const annualizationComplete =
-                    tripsPerDay !== null &&
-                    tripsPerDay > 0 &&
-                    operatingDays !== null &&
-                    operatingDays > 0;
-
-                const annualTrips = annualizationComplete
-                    ? projectedAADT * tripsPerDay * operatingDays
-                    : 0;
-
-                typeResults[type.id] = {
-                    day1,
-                    day2,
-                    day3,
-                    average,
-                    projectedAADT,
-                    tripsPerDay,
-                    operatingDays,
-                    annualizationComplete,
-                    annualTrips,
-                };
-            });
+        const vehicleRows = selectedVehicles.map((vehicle) => {
+            const entry = form.traffic?.[vehicle.id]?.[vehicle.group] ?? {};
+            const day1 = positiveNumber(entry.day1);
+            const day2 = positiveNumber(entry.day2);
+            const day3 = positiveNumber(entry.day3);
+            const average = (day1 + day2 + day3) / 3;
+            const tripsPerDay = hasValue(entry.tripsPerDay) ? positiveNumber(entry.tripsPerDay) : null;
+            const operatingDays = hasValue(entry.operatingDays) ? positiveNumber(entry.operatingDays) : null;
+            const projectedAADT = projectTrafficCount(average, growthRate, yearDifference, tripsPerDay ?? 0);
+            const annualizationComplete = tripsPerDay !== null && tripsPerDay > 0 && operatingDays !== null && operatingDays > 0;
+            const annualTrips = annualizationComplete ? projectedAADT * tripsPerDay * operatingDays : 0;
 
             return {
                 vehicleId: vehicle.id,
+                categoryId: vehicle.categoryId,
                 vehicle: vehicle.label,
-                types: typeResults,
-                combinedAADT:
-                    typeResults.public.projectedAADT +
-                    typeResults.private.projectedAADT,
-                combinedAnnualTrips:
-                    typeResults.public.annualTrips +
-                    typeResults.private.annualTrips,
+                group: vehicle.group,
+                groupLabel: vehicle.groupLabel,
+                types: {
+                    [vehicle.group]: {
+                        day1, day2, day3, average, projectedAADT, tripsPerDay,
+                        operatingDays, annualizationComplete, annualTrips,
+                    },
+                },
+                combinedAADT: projectedAADT,
+                combinedAnnualTrips: annualTrips,
             };
         });
 
-        const totals = VEHICLE_TYPES.reduce((result, type) => {
-            result[type.id] = vehicleRows.reduce(
-                (sum, row) => sum + row.types[type.id].annualTrips,
-                0,
-            );
-
-            return result;
-        }, {});
-
-        const aadtTotals = VEHICLE_TYPES.reduce((result, type) => {
-            result[type.id] = vehicleRows.reduce(
-                (sum, row) => sum + row.types[type.id].projectedAADT,
-                0,
-            );
-
-            return result;
-        }, {});
-
+        const totals = Object.fromEntries(VEHICLE_TYPES.map((type) => [
+            type.id,
+            vehicleRows.filter((row) => row.group === type.id)
+                .reduce((sum, row) => sum + row.types[type.id].annualTrips, 0),
+        ]));
+        const aadtTotals = Object.fromEntries(VEHICLE_TYPES.map((type) => [
+            type.id,
+            vehicleRows.filter((row) => row.group === type.id)
+                .reduce((sum, row) => sum + row.types[type.id].projectedAADT, 0),
+        ]));
         const annualizationInputsComplete = vehicleRows.every((row) =>
-            VEHICLE_TYPES.every(
-                (type) => row.types[type.id].annualizationComplete,
-            ),
+            row.types[row.group].annualizationComplete
         );
 
         return {
-            vehicleRows,
-            totals,
-            aadtTotals,
+            vehicleRows, totals, aadtTotals,
             grandTotal: totals.public + totals.private,
             combinedAADT: aadtTotals.public + aadtTotals.private,
             annualizationInputsComplete,
         };
-    }, [form]);
+    }, [form, selectedVehicles]);
 
     /*
      * Tab 2:
@@ -464,30 +428,28 @@ export default function ModalSVOTab1({
                     ? (roadLength / totalRoadLength) * 100
                     : 0;
 
-            const vehicleResults = VEHICLES.map((vehicle) => {
+            const vehicleResults = selectedVehicles.map((vehicle) => {
                 const trafficRow = trafficCalculations.vehicleRows.find(
                     (row) => row.vehicleId === vehicle.id,
                 );
 
-                const publicTraffic = trafficRow?.types.public;
-                const privateTraffic = trafficRow?.types.private;
-
-                const publicAnnualTrips =
-                    publicTraffic?.annualTrips ?? 0;
-
-                const privateAnnualTrips =
-                    privateTraffic?.annualTrips ?? 0;
-
-                const annualTraffic =
-                    publicAnnualTrips + privateAnnualTrips;
-
-                const incrementalRate = surface.rates[vehicle.id];
+                const groupedTraffic = trafficRow?.types[vehicle.group];
+                const publicAnnualTrips = vehicle.group === "public"
+                    ? (groupedTraffic?.annualTrips ?? 0)
+                    : 0;
+                const privateAnnualTrips = vehicle.group === "private"
+                    ? (groupedTraffic?.annualTrips ?? 0)
+                    : 0;
+                const annualTraffic = publicAnnualTrips + privateAnnualTrips;
+                const incrementalRate = surface.rates[vehicle.rateKey];
 
                 const annualSavings =
                     incrementalRate * annualTraffic * roadLength;
 
                 return {
                     vehicleId: vehicle.id,
+                    categoryId: vehicle.categoryId,
+                    group: vehicle.group,
                     vehicle: vehicle.label,
                     incrementalRate,
                     publicAnnualTrips,
@@ -516,7 +478,7 @@ export default function ModalSVOTab1({
             0,
         );
 
-        const savingsByVehicle = VEHICLES.map((vehicle) => ({
+        const savingsByVehicle = selectedVehicles.map((vehicle) => ({
             ...vehicle,
             total: results.reduce((sum, surface) => {
                 const row = surface.vehicleResults.find(
@@ -527,8 +489,39 @@ export default function ModalSVOTab1({
             }, 0),
         }));
 
+        // VOH.xlsx rows 172–178: weighted incremental VOC per vehicle.
+        // Weight = road-condition length / total road length.
+        // Sum(weight * (existing VOC - good paved VOC)) across all five conditions.
+        // Weighted rate * total length is algebraically equal to the sum of
+        // each road-condition difference * its own length.
+        const weightedVOCByVehicle = selectedVehicles.map((vehicle) => {
+            const components = results.map((surface) => ({
+                surfaceId: surface.id,
+                code: surface.code,
+                share: totalRoadLength > 0 ? surface.roadLength / totalRoadLength : 0,
+                incrementalRate: surface.rates[vehicle.rateKey],
+                weightedRate: totalRoadLength > 0
+                    ? (surface.roadLength / totalRoadLength) * surface.rates[vehicle.rateKey]
+                    : 0,
+            }));
+            const trafficRow = trafficCalculations.vehicleRows.find((row) => row.vehicleId === vehicle.id);
+            const weightedIncrementalVOC = components.reduce((sum, item) => sum + item.weightedRate, 0);
+            return {
+                vehicleId: vehicle.id,
+                vehicle: vehicle.label,
+                group: vehicle.group,
+                components,
+                weightedIncrementalVOC,
+                annualTrips: trafficRow?.combinedAnnualTrips ?? 0,
+                annualSavings: weightedIncrementalVOC * (trafficRow?.combinedAnnualTrips ?? 0) * totalRoadLength,
+            };
+        });
+        const weightedAnnualSavings = weightedVOCByVehicle.reduce((sum, row) => sum + row.annualSavings, 0);
+
         return {
             results,
+            weightedVOCByVehicle,
+            weightedAnnualSavings,
             totalRoadLength,
             totalPercentage:
                 totalRoadLength > 0
@@ -540,7 +533,166 @@ export default function ModalSVOTab1({
             totalSavings,
             savingsByVehicle,
         };
-    }, [vocForm, trafficCalculations]);
+    }, [vocForm, trafficCalculations, selectedVehicles]);
+
+    /*
+     * Tab 3 uses ONE consolidated road segment, not five copies of 7.90 km.
+     * Excel E178 / C14: weighted VOC = Σ[(surface length / total length)
+     *                                  × (existing VOC − good paved VOC)].
+     * The 7.90 km example produces a motorcycle VOC difference ≈ 9.64
+     * when Tab 2 lengths are 0, 2, 1, 1.4, and 3.5 km respectively.
+     */
+    const projectionResults = useMemo(() => {
+        const growthRate = Math.max(0, numberValue(form.trafficGrowthRate)) / 100;
+        const years = Array.from({ length: 20 }, (_, index) => index + 1);
+        const roadLength = roadSurfaceResults.totalRoadLength;
+        const weightedRateByVehicle = new Map(
+            roadSurfaceResults.weightedVOCByVehicle.map((item) => [
+                item.vehicleId,
+                item.weightedIncrementalVOC,
+            ]),
+        );
+
+        const types = {};
+        VEHICLE_TYPES.forEach((type) => {
+            const rows = selectedVehicles
+                .filter((vehicle) => vehicle.group === type.id)
+                .map((vehicle) => {
+                    const traffic = form.traffic?.[vehicle.id]?.[vehicle.group] ?? {};
+                    const survey = [traffic.day1, traffic.day2, traffic.day3].map(positiveNumber);
+                    const baseAADT = survey.reduce((sum, value) => sum + value, 0) / 3;
+                    const tripsPerDay = positiveNumber(traffic.tripsPerDay);
+                    const operatingDays = positiveNumber(traffic.operatingDays);
+                    const incrementalRate = weightedRateByVehicle.get(vehicle.id) ?? 0;
+
+                    const annuals = years.map((year) => {
+                        const projectedAADT = projectVOHBenefitYearTraffic(
+                            baseAADT, growthRate, year, tripsPerDay,
+                        );
+                        const annualTrips = projectedAADT * tripsPerDay * operatingDays;
+                        return {
+                            year,
+                            projectedAADT,
+                            annualTrips,
+                            savings: incrementalRate * annualTrips * roadLength,
+                        };
+                    });
+
+                    return {
+                        vehicleId: vehicle.id,
+                        categoryId: vehicle.categoryId,
+                        vehicle: vehicle.label,
+                        group: vehicle.group,
+                        baseAADT,
+                        tripsPerDay,
+                        operatingDays,
+                        incrementalRate,
+                        roadLength,
+                        annuals,
+                        total: annuals.reduce((sum, item) => sum + item.savings, 0),
+                    };
+                });
+
+            const yearlyTotals = years.map((year, index) => ({
+                year,
+                savings: rows.reduce((sum, row) => sum + row.annuals[index].savings, 0),
+                annualTrips: rows.reduce((sum, row) => sum + row.annuals[index].annualTrips, 0),
+            }));
+            types[type.id] = {
+                rows,
+                yearlyTotals,
+                total: yearlyTotals.reduce((sum, item) => sum + item.savings, 0),
+            };
+        });
+
+        // One combined workbook worksheet; the road length is counted only once.
+        const surfaces = [{
+            id: "weighted-total",
+            code: "VOH",
+            label: "Consolidated Weighted VOC Savings",
+            roadLength,
+            types,
+            yearlyTotals: years.map((year, index) => ({
+                year,
+                savings: VEHICLE_TYPES.reduce(
+                    (sum, type) => sum + types[type.id].yearlyTotals[index].savings, 0,
+                ),
+            })),
+        }];
+
+        // Laravel expects five road-surface projections. Save each condition
+        // with its ACTUAL Tab 2 length, so their sum equals the consolidated
+        // weighted calculation without multiplying the 7.90 km five times.
+        const roadSurfaceProjections = ROAD_SURFACES.map((surface) => {
+            const actualLength = positiveNumber(vocForm.roadLengths[surface.id]);
+            const surfaceTypes = {};
+            VEHICLE_TYPES.forEach((type) => {
+                const rows = types[type.id].rows.map((combinedRow) => {
+                    const vehicle = VEHICLES.find((item) => item.id === combinedRow.vehicleId);
+                    const incrementalRate = surface.rates[vehicle.rateKey];
+                    const annuals = combinedRow.annuals.map((annual) => ({
+                        year: annual.year,
+                        projectedAADT: annual.projectedAADT,
+                        annualTrips: annual.annualTrips,
+                        savings: incrementalRate * annual.annualTrips * actualLength,
+                    }));
+                    return {
+                        ...combinedRow,
+                        incrementalRate,
+                        roadLength: actualLength,
+                        annuals,
+                        total: annuals.reduce((sum, annual) => sum + annual.savings, 0),
+                    };
+                });
+                const yearlyTotals = years.map((year, index) => ({
+                    year,
+                    savings: rows.reduce((sum, row) => sum + row.annuals[index].savings, 0),
+                    annualTrips: rows.reduce((sum, row) => sum + row.annuals[index].annualTrips, 0),
+                }));
+                surfaceTypes[type.id] = {
+                    rows,
+                    yearlyTotals,
+                    total: yearlyTotals.reduce((sum, item) => sum + item.savings, 0),
+                };
+            });
+            return {
+                id: surface.id,
+                code: surface.code,
+                label: surface.label,
+                formula: surface.formula,
+                roadLength: actualLength,
+                types: surfaceTypes,
+                yearlyTotals: years.map((year, index) => ({
+                    year,
+                    savings: VEHICLE_TYPES.reduce(
+                        (sum, type) => sum + surfaceTypes[type.id].yearlyTotals[index].savings,
+                        0,
+                    ),
+                })),
+            };
+        });
+
+        const yearlyTotals = years.map((year, index) => ({
+            year,
+            public: types.public.yearlyTotals[index].savings,
+            private: types.private.yearlyTotals[index].savings,
+            total: surfaces[0].yearlyTotals[index].savings,
+        }));
+
+        return {
+            years,
+            surfaces,
+            roadSurfaceProjections,
+            yearlyTotals,
+            totalRoadLength: roadLength,
+            weightedVOCByVehicle: roadSurfaceResults.weightedVOCByVehicle,
+            grandTotal: yearlyTotals.reduce((sum, item) => sum + item.total, 0),
+            totalYear1: yearlyTotals[0]?.total ?? 0,
+            totalYear10: yearlyTotals[9]?.total ?? 0,
+            totalYear20: yearlyTotals[19]?.total ?? 0,
+            firstTenYearTotal: yearlyTotals.slice(0, 10).reduce((sum, item) => sum + item.total, 0),
+        };
+    }, [form, selectedVehicles, roadSurfaceResults]);
 
     const validateForm = () => {
         const nextErrors = {};
@@ -579,9 +731,9 @@ export default function ModalSVOTab1({
             nextErrors.roadLength = "Road length cannot be negative.";
         }
 
-        VEHICLES.forEach((vehicle) => {
-            VEHICLE_TYPES.forEach((type) => {
-                const entry = form.traffic[vehicle.id][type.id];
+        selectedVehicles.forEach((vehicle) => {
+            const type = { id: vehicle.group };
+                const entry = form.traffic[vehicle.id][vehicle.group];
 
                 ["day1", "day2", "day3"].forEach((field) => {
                     if (
@@ -612,7 +764,6 @@ export default function ModalSVOTab1({
                         `${vehicle.id}.${type.id}.operatingDays`
                     ] = "Operating days must be between 0 and 366.";
                 }
-            });
         });
 
         ROAD_SURFACES.forEach((surface) => {
@@ -629,6 +780,7 @@ export default function ModalSVOTab1({
 
     const handleSubmit = (event) => {
         event.preventDefault();
+        if (saving || readOnly) return;
 
         if (!validateForm()) {
             setActiveSection("tab1");
@@ -637,6 +789,7 @@ export default function ModalSVOTab1({
 
         const tab1Payload = {
             ...form,
+            selectedVehicleIds,
             barangay: form.barangay.trim(),
             year1: numberValue(form.year1),
             inputYear: numberValue(form.inputYear),
@@ -674,10 +827,28 @@ export default function ModalSVOTab1({
             totalRoadLength: roadSurfaceResults.totalRoadLength,
             totalPercentage: roadSurfaceResults.totalPercentage,
             savingsByVehicle: roadSurfaceResults.savingsByVehicle,
+            weightedVOCByVehicle: roadSurfaceResults.weightedVOCByVehicle,
+            weightedAnnualSavings: roadSurfaceResults.weightedAnnualSavings,
             totalAnnualVOCSavings: roadSurfaceResults.totalSavings,
             pricesAdjustedAsOf: 2022,
             calculationMethod:
                 "Incremental VOC rate × projected AADT × trips per day × operating days per year × actual road length",
+        };
+
+        const tab3Payload = {
+            projectionPeriod: 20,
+            totalRoadLength: projectionResults.totalRoadLength,
+            weightedVOCByVehicle: projectionResults.weightedVOCByVehicle,
+            trafficGrowthRate: numberValue(form.trafficGrowthRate),
+            years: projectionResults.years,
+            roadSurfaceProjections: projectionResults.roadSurfaceProjections,
+            yearlyTotals: projectionResults.yearlyTotals,
+            // Same Year 1 TOTAL VOC SAVINGS shown in Tab 3.
+            totalYear1VOCSavings: projectionResults.totalYear1,
+            totalTwentyYearVOCSavings: projectionResults.grandTotal,
+            totalTenYearVOCSavings: projectionResults.firstTenYearTotal,
+            calculationMethod:
+                "Year 1: adjusted survey traffic × (1 + growth); Years 2–20: compound growth; savings = projected traffic × trips/day × operating days × SUM(road-condition VOC difference × road-length share) × total road length",
         };
 
         onSave?.({
@@ -686,7 +857,15 @@ export default function ModalSVOTab1({
             benefitName: "Vehicle Operating Cost Savings",
             worksheet: "Traffic Survey and VOC Savings",
             tab2: tab2Payload,
-            combinedAnnualBenefit: roadSurfaceResults.totalSavings,
+            tab3: tab3Payload,
+            // Annual Benefit in the database must use Tab 3, Year 1 TOTAL VOC SAVINGS.
+            // Keep the existing key for compatibility with the parent Save handler.
+            combinedAnnualBenefit: projectionResults.totalYear1,
+            annualBenefit: projectionResults.totalYear1,
+            annualSavings: projectionResults.totalYear1,
+            annual_savings: Math.round((projectionResults.totalYear1 + Number.EPSILON) * 100) / 100,
+            totalTwentyYearVOCSavings: projectionResults.grandTotal,
+            totalTenYearVOCSavings: projectionResults.firstTenYearTotal,
         });
     };
 
@@ -772,8 +951,13 @@ export default function ModalSVOTab1({
                                 icon: <FaRoad />,
                             },
                             {
+                                id: "tab3",
+                                label: "Tab 3 — 20-Year Projection",
+                                icon: <FaCalendarAlt />,
+                            },
+                            {
                                 id: "all",
-                                label: "Show Both Sections",
+                                label: "Show All Tabs",
                                 icon: <FaCheckCircle />,
                             },
                         ].map((item) => (
@@ -799,6 +983,7 @@ export default function ModalSVOTab1({
                     className="flex min-h-0 flex-1 flex-col"
                 >
                     <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
+                        <fieldset disabled={readOnly} className="min-w-0">
                         {/* TAB 1 */}
                         {(activeSection === "tab1" ||
                             activeSection === "all") && (
@@ -988,7 +1173,7 @@ export default function ModalSVOTab1({
                                             Traffic Volume Inputs
                                         </h4>
                                         <p className="mt-1 text-sm leading-6 text-slate-500">
-                                            Enter the observed counts for each
+                                            Select the vehicle categories above, then enter the observed counts for each
                                             survey day. Trips per Day and
                                             Operating Days per Year must be
                                             entered separately for each public
@@ -996,23 +1181,57 @@ export default function ModalSVOTab1({
                                         </p>
                                     </div>
 
+                                    <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                                <h5 className="font-bold text-slate-800">Select Vehicle Categories</h5>
+                                                <p className="mt-1 text-xs text-slate-600">Choose the vehicle categories included in the survey. Motorcycle includes separate Public and Private traffic inputs. Trips/day and operating-day defaults follow the Excel assumptions and remain editable. Only selected categories are included in calculations.</p>
+                                            </div>
+                                            <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-800">{selectedVehicleIds.length} selected</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+                                            {VEHICLE_CATEGORIES.map((category) => {
+                                                const isSelected = selectedVehicleIds.includes(category.id);
+                                                return (
+                                                    <button
+                                                        key={category.id}
+                                                        type="button"
+                                                        onClick={() => toggleVehicle(category.id)}
+                                                        aria-pressed={isSelected}
+                                                        title={category.description}
+                                                        className={`rounded-lg border px-3 py-3 text-sm font-semibold transition ${isSelected ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-300 bg-white text-slate-700 hover:border-emerald-500 hover:bg-emerald-50"}`}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <span className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${isSelected ? "border-white bg-white text-emerald-700" : "border-slate-400"}`}>{isSelected ? "✓" : "+"}</span>
+                                                            {category.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {selectedVehicleIds.length === 1 && (
+                                            <p className="mt-2 text-xs text-emerald-800">At least one vehicle category must remain selected.</p>
+                                        )}
+                                    </div>
+
                                     <div className="space-y-5">
-                                        {VEHICLES.map((vehicle) => (
+                                        {selectedVehicles.map((vehicle) => (
                                             <article
                                                 key={vehicle.id}
                                                 className="overflow-hidden rounded-xl border border-slate-200"
                                             >
                                                 <div className="flex items-center justify-between gap-3 bg-slate-100 px-4 py-3">
-                                                    <h5 className="font-bold text-slate-800">
-                                                        {vehicle.label}
-                                                    </h5>
+                                                    <div>
+                                                        <h5 className="font-bold text-slate-800">{vehicle.label}</h5>
+                                                        <p className="mt-0.5 text-xs text-slate-500">{vehicle.groupLabel}</p>
+                                                    </div>
                                                     <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                                                        Vehicle category
+                                                        {vehicle.groupLabel}
                                                     </span>
                                                 </div>
 
                                                 <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
-                                                    {VEHICLE_TYPES.map((type) => {
+                                                    {[VEHICLE_TYPES.find((item) => item.id === vehicle.group)].map((type) => {
                                                         const entry =
                                                             form.traffic[
                                                                 vehicle.id
@@ -1086,7 +1305,7 @@ export default function ModalSVOTab1({
                                                                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                                                                     <div>
                                                                         <label className={labelClass}>
-                                                                            Trips per Day *
+                                                                            Trips per Day (Excel default)
                                                                         </label>
                                                                         <input
                                                                             type="number"
@@ -1113,7 +1332,7 @@ export default function ModalSVOTab1({
 
                                                                     <div>
                                                                         <label className={labelClass}>
-                                                                            Operating Days per Year *
+                                                                            Operating Days per Year (Excel default)
                                                                         </label>
                                                                         <input
                                                                             type="number"
@@ -1321,7 +1540,7 @@ export default function ModalSVOTab1({
                                     </div>
 
                                     <div className="overflow-x-auto">
-                                        <table className="w-full min-w-[850px] border-collapse text-sm">
+                                        <table className="w-full min-w-[2200px] border-collapse text-sm">
                                             <thead>
                                                 <tr className="bg-white text-left text-xs uppercase tracking-wide text-slate-500">
                                                     <th className="px-4 py-3">
@@ -1330,7 +1549,7 @@ export default function ModalSVOTab1({
                                                     <th className="px-4 py-3">
                                                         Formula
                                                     </th>
-                                                    {VEHICLES.map((vehicle) => (
+                                                    {selectedVehicles.map((vehicle) => (
                                                         <th
                                                             key={vehicle.id}
                                                             className="px-4 py-3 text-right"
@@ -1360,14 +1579,14 @@ export default function ModalSVOTab1({
                                                             {surface.formula}
                                                         </td>
 
-                                                        {VEHICLES.map((vehicle) => (
+                                                        {selectedVehicles.map((vehicle) => (
                                                             <td
                                                                 key={vehicle.id}
                                                                 className="px-4 py-3 text-right tabular-nums text-slate-700"
                                                             >
                                                                 {formatNumber(
                                                                     surface.rates[
-                                                                        vehicle.id
+                                                                        vehicle.rateKey
                                                                     ],
                                                                 )}
                                                             </td>
@@ -1377,6 +1596,53 @@ export default function ModalSVOTab1({
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+
+                                {/* VOH workbook weighted VOC calculation (rows 172–178) */}
+                                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                    <div className="border-b border-slate-200 bg-slate-100 px-4 py-4 sm:px-5">
+                                        <h4 className="font-bold text-slate-800">VOH Workbook — Weighted Incremental VOC</h4>
+                                        <p className="mt-1 text-sm text-slate-500">
+                                            Each road-condition VOC difference is multiplied by its share of total road length.
+                                            The weighted rates are summed, as in VOH.xlsx rows 172–178.
+                                        </p>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[1000px] border-collapse text-sm">
+                                            <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left">Vehicle / Group</th>
+                                                    {ROAD_SURFACES.map((surface) => <th key={surface.id} className="px-4 py-3 text-right">{surface.code}</th>)}
+                                                    <th className="px-4 py-3 text-right">Weighted VOC (₱/km/trip)</th>
+                                                    <th className="px-4 py-3 text-right">Annual Savings (₱)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {roadSurfaceResults.weightedVOCByVehicle.map((vehicle) => (
+                                                    <tr key={vehicle.vehicleId} className="border-t border-slate-100">
+                                                        <td className="px-4 py-3 font-semibold text-slate-800">
+                                                            {vehicle.vehicle} <span className="text-xs font-normal text-slate-500">({vehicle.group})</span>
+                                                        </td>
+                                                        {vehicle.components.map((item) => (
+                                                            <td key={item.surfaceId} className="px-4 py-3 text-right tabular-nums">{formatNumber(item.weightedRate, 6)}</td>
+                                                        ))}
+                                                        <td className="px-4 py-3 text-right font-bold tabular-nums">{formatNumber(vehicle.weightedIncrementalVOC, 6)}</td>
+                                                        <td className="px-4 py-3 text-right font-bold tabular-nums text-emerald-800">{formatCurrency(vehicle.annualSavings)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="border-t-2 border-emerald-200 bg-emerald-50 font-bold text-emerald-950">
+                                                    <td colSpan={ROAD_SURFACES.length + 2} className="px-4 py-3">TOTAL — WEIGHTED VOC METHOD</td>
+                                                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrency(roadSurfaceResults.weightedAnnualSavings)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    <p className="px-4 py-3 text-xs text-slate-500">
+                                        Cross-check against condition-by-condition savings: {formatCurrency(roadSurfaceResults.totalSavings)}.
+                                        Both totals should agree before display rounding.
+                                    </p>
                                 </div>
 
                                 {/* Road-condition worksheets */}
@@ -1773,10 +2039,10 @@ export default function ModalSVOTab1({
                                             </p>
                                             <ul className="mt-2 list-disc space-y-1 pl-5">
                                                 <li>
-                                                    Trips per Day and Operating Days per Year have no default values.
+                                                    Trips per Day and Operating Days per Year start with editable workbook assumptions (2 trips for motorcycles, 1 for other vehicles; 275 or 260 operating days).
                                                 </li>
                                                 <li>
-                                                    Annual trips and VOC savings remain zero for a public/private vehicle category until both fields contain positive values.
+                                                    Annual trips and VOC savings remain zero for a public/private vehicle category if either annualization field is blank or zero.
                                                 </li>
                                                 <li>
                                                     Road-length percentages use the sum of the five entered road lengths.
@@ -1796,14 +2062,227 @@ export default function ModalSVOTab1({
                                 </div>
                             </section>
                         )}
+
+                        {/* TAB 3 — 20-YEAR VOC SAVINGS PROJECTION (EXCEL-STYLE) */}
+                        {(activeSection === "tab3" || activeSection === "all") && (
+                            <section className="mt-8 space-y-6">
+                                <div className="flex flex-col gap-3 border-b border-emerald-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="flex items-start gap-3">
+                                        <div className="rounded-xl bg-blue-100 p-3 text-blue-800">
+                                            <FaCalendarAlt className="text-lg" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-800">
+                                                Tab 3 — 20-Year VOC Savings Projection
+                                            </h3>
+                                            <p className="mt-1 text-sm leading-6 text-slate-500">
+                                                Excel-style annual projection using the combined road-length-weighted VOC difference for each vehicle type.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span className="w-fit rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-800">
+                                        20-Year Projection
+                                    </span>
+                                </div>
+
+                                <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
+                                    <p className="font-bold">How this projection works</p>
+                                    <p className="mt-1">
+                                        The three survey-day counts are averaged for each public/private vehicle category. The workbook's VOC benefit table starts at the second forecast column: Year 1 benefits use the first adjusted count compounded once more, and Years 2–20 continue compounding the annual growth rate. Trips per day, operating days, the road-length-weighted VOC difference from Tab 2, and the total road length are carried into the savings calculation. For the workbook example, Tab 2 lengths total 7.90 km.
+                                    </p>
+                                    <p className="mt-2 font-semibold">
+                                        Annual VOC Savings = Projected Traffic × Trips per Day × Operating Days × Weighted VOC Difference × Total Road Length.
+                                    </p>
+                                    <p className="mt-1 text-xs text-blue-800">
+                                        Growth rate: {formatNumber(form.trafficGrowthRate)}% per year. Workbook assumptions: motorcycles/tricycles = 275 operating days; service vehicles, pickups, and trucks = 260 days. VOC rates use the exact values in the workbook's 2022 price table.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Year 1 savings</p>
+                                        <p className="mt-2 text-xl font-extrabold tabular-nums text-slate-900">{formatCurrency(projectionResults.totalYear1)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Year 20 savings</p>
+                                        <p className="mt-2 text-xl font-extrabold tabular-nums text-slate-900">{formatCurrency(projectionResults.totalYear20)}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">20-year total savings</p>
+                                        <p className="mt-2 text-xl font-extrabold tabular-nums text-emerald-950">{formatCurrency(projectionResults.grandTotal)}</p>
+                                    </div>
+                                </div>
+
+                                {projectionResults.surfaces.map((surface) => (
+                                    <article key={surface.id} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
+                                        <div className="border-b border-slate-300 bg-slate-100 px-4 py-3">
+                                            <h4 className="font-bold text-slate-900">{surface.code} — {surface.label}</h4>
+                                            <p className="mt-1 text-xs text-slate-600">
+                                                Total road length: {formatNumber(surface.roadLength, 2)} km (from Tab 2)
+                                            </p>
+                                        </div>
+
+                                        {VEHICLE_TYPES.map((type) => {
+                                            const typeResult = surface.types[type.id];
+                                            return (
+                                                <div key={type.id} className="border-b border-slate-300 last:border-b-0">
+                                                    <div className={`px-4 py-2.5 ${type.id === "public" ? "bg-lime-500" : "bg-orange-400"}`}>
+                                                        <h5 className="font-bold text-slate-950">{type.label}</h5>
+                                                    </div>
+
+                                                    <div className="space-y-4 p-3 sm:p-4">
+                                                        {typeResult.rows.map((row) => (
+                                                            <div key={row.vehicleId} className="overflow-hidden rounded-md border border-slate-300">
+                                                                <div className="border-b border-slate-300 bg-slate-50 px-3 py-2">
+                                                                    <p className="font-semibold text-slate-800">{row.vehicle}</p>
+                                                                </div>
+                                                                <div className="overflow-x-auto">
+                                                                    <table className="w-full min-w-[2400px] border-collapse text-xs">
+                                                                        <thead>
+                                                                            <tr className="bg-slate-100 text-slate-800">
+                                                                                <th className="w-[260px] border border-slate-300 px-3 py-2 text-left font-bold">Benefits</th>
+                                                                                <th className="w-[90px] border border-slate-300 px-2 py-2 text-center font-bold">Unit</th>
+                                                                                {projectionResults.years.map((year) => (
+                                                                                    <th key={year} className="min-w-[105px] border border-slate-300 px-2 py-2 text-center font-bold">{year}</th>
+                                                                                ))}
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            <tr>
+                                                                                <td className="border border-slate-200 px-3 py-2">Total number /a</td>
+                                                                                <td className="border border-slate-200 px-2 py-2 text-center">unit</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-slate-200 px-2 py-2 text-right tabular-nums">{formatNumber(annual.projectedAADT, 0)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td className="border border-slate-200 px-3 py-2">Number of trips per day /b</td>
+                                                                                <td className="border border-slate-200 px-2 py-2 text-center">trip/day</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-slate-200 px-2 py-2 text-right tabular-nums">{formatNumber(row.tripsPerDay, 0)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td className="border border-slate-200 px-3 py-2">Number of days in operation /c</td>
+                                                                                <td className="border border-slate-200 px-2 py-2 text-center">day/year</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-slate-200 px-2 py-2 text-right tabular-nums">{formatNumber(row.operatingDays, 0)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td className="border border-slate-200 px-3 py-2">Weighted VOC Difference /d</td>
+                                                                                <td className="border border-slate-200 px-2 py-2 text-center">Php</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-slate-200 px-2 py-2 text-right tabular-nums">{formatNumber(row.incrementalRate, 6)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                            <tr>
+                                                                                <td className="border border-slate-200 px-3 py-2">Total road length /e</td>
+                                                                                <td className="border border-slate-200 px-2 py-2 text-center">km</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-slate-200 px-2 py-2 text-right tabular-nums">{formatNumber(row.roadLength, 2)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                        </tbody>
+                                                                        <tfoot>
+                                                                            <tr className="bg-cyan-500 font-bold text-slate-950">
+                                                                                <td className="border border-cyan-700 px-3 py-2 italic">Subtotal ({row.vehicle})</td>
+                                                                                <td className="border border-cyan-700 px-2 py-2 text-center">Php</td>
+                                                                                {row.annuals.map((annual) => (
+                                                                                    <td key={annual.year} className="border border-cyan-700 px-2 py-2 text-right tabular-nums">{formatCurrency(annual.savings)}</td>
+                                                                                ))}
+                                                                            </tr>
+                                                                        </tfoot>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        <div className="overflow-x-auto rounded-md border-2 border-cyan-600">
+                                                            <table className="w-full min-w-[2400px] border-collapse text-xs">
+                                                                <tbody>
+                                                                    <tr className="bg-cyan-100 font-extrabold text-slate-950">
+                                                                        <td className="w-[260px] border border-cyan-700 px-3 py-3">TOTAL — {type.label}</td>
+                                                                        <td className="w-[90px] border border-cyan-700 px-2 py-3 text-center">Php</td>
+                                                                        {typeResult.yearlyTotals.map((item) => (
+                                                                            <td key={item.year} className="min-w-[115px] border border-cyan-700 px-2 py-3 text-right tabular-nums">{formatCurrency(item.savings)}</td>
+                                                                        ))}
+                                                                    </tr>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        <div className="overflow-x-auto border-t-2 border-emerald-700 bg-emerald-50">
+                                            <table className="w-full min-w-[2400px] border-collapse text-xs">
+                                                <tbody>
+                                                    <tr className="font-extrabold text-emerald-950">
+                                                        <td className="w-[260px] border border-emerald-200 px-3 py-3">TOTAL {surface.code} — PUBLIC + PRIVATE</td>
+                                                        <td className="w-[90px] border border-emerald-200 px-2 py-3 text-center">Php</td>
+                                                        {surface.yearlyTotals.map((item) => (
+                                                            <td key={item.year} className="min-w-[115px] border border-emerald-200 px-2 py-3 text-right tabular-nums">{formatCurrency(item.savings)}</td>
+                                                        ))}
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </article>
+                                ))}
+
+                                <div className="overflow-hidden rounded-xl border-2 border-emerald-300 bg-white">
+                                    <div className="bg-emerald-800 px-4 py-3 text-white">
+                                        <h4 className="font-bold">20-Year Consolidated VOC Savings</h4>
+                                        <p className="mt-1 text-xs text-emerald-100">Total annual savings using the weighted VOC difference across all road conditions (no duplicate road-length multiplication).</p>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[2200px] border-collapse text-sm">
+                                            <thead>
+                                                <tr className="bg-slate-100">
+                                                    <th className="border border-slate-300 px-3 py-2 text-left">Benefits</th>
+                                                    <th className="border border-slate-300 px-2 py-2">Unit</th>
+                                                    {projectionResults.years.map((year) => <th key={year} className="border border-slate-300 px-2 py-2">{year}</th>)}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr className="bg-cyan-100 font-extrabold">
+                                                    <td className="border border-slate-300 px-3 py-3">TOTAL VOC SAVINGS</td>
+                                                    <td className="border border-slate-300 px-2 py-3 text-center">Php</td>
+                                                    {projectionResults.yearlyTotals.map((item) => <td key={item.year} className="border border-slate-300 px-2 py-3 text-right tabular-nums">{formatCurrency(item.total)}</td>)}
+                                                </tr>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-emerald-100 font-extrabold text-emerald-950">
+                                                    <td colSpan={2} className="border border-emerald-300 px-3 py-3">UNDISCOUNTED 20-YEAR TOTAL</td>
+                                                    <td colSpan={20} className="border border-emerald-300 px-3 py-3 text-right text-base tabular-nums">{formatCurrency(projectionResults.grandTotal)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                                    <p className="font-bold">Data interpretation and validation</p>
+                                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                                        <li>The “Total number /a” row is the projected traffic count for each year, calculated from the three-day average in Tab 1.</li>
+                                        <li>Trips per day, operating days, VOC difference, and road length are repeated across the years because these inputs remain constant unless the user changes them.</li>
+                                        <li>Each vehicle subtotal uses its own weighted VOC difference. Public and private subtotals are combined once for the full road length.</li>
+                                        <li>The 20-year grand total is undiscounted. Apply the approved economic discount rate in the economic analysis worksheet when present value is required.</li>
+                                        <li>Check the underlying unrounded traffic counts, VOC rates, and road length against the official MIADP workbook. Display rounding can cause small differences from manually calculated sample values.</li>
+                                    </ul>
+                                </div>
+                            </section>
+                        )}
+                        </fieldset>
                     </main>
 
                     {/* Footer */}
                     <footer className="flex shrink-0 flex-col gap-3 border-t border-slate-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                         <p className="text-xs leading-5 text-slate-500">
-                            No default trips-per-day or operating-days values
-                            are applied. Review all traffic assumptions and
-                            road lengths before saving.
+                            Projection values update automatically from Tabs 1 and 2.
+                            Review traffic assumptions, VOC rates, and road lengths before saving.
                         </p>
 
                         <div className="flex flex-col-reverse gap-2 sm:flex-row">
@@ -1812,16 +2291,17 @@ export default function ModalSVOTab1({
                                 onClick={onClose}
                                 className={`${buttonClass} border border-slate-300 bg-white text-slate-700 hover:bg-slate-100`}
                             >
-                                Cancel
+                                {readOnly ? "Close" : "Cancel"}
                             </button>
 
-                            <button
+                            {!readOnly && <button
                                 type="submit"
+                                disabled={saving}
                                 className={`${buttonClass} bg-emerald-700 text-white shadow-sm hover:bg-emerald-800`}
                             >
                                 <FaSave />
-                                Save Traffic Survey and VOC Savings
-                            </button>
+                                {saving ? "Saving to database..." : "Save Traffic Survey, VOC Savings, and 20-Year Projection"}
+                            </button>}
                         </div>
                     </footer>
                 </form>

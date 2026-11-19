@@ -15,7 +15,9 @@ import {
     FaCalculator,
 } from "react-icons/fa";
 
-const YEARS = Array.from({ length: 10 }, (_, index) => index + 1);
+const PROJECTION_YEARS = 20;
+const YEARS = Array.from({ length: PROJECTION_YEARS }, (_, index) => index + 1);
+const TABLE_COLUMN_COUNT = PROJECTION_YEARS + 2;
 const ROAD_LENGTH = 7.9;
 const PERIODIC_MAINTENANCE_RATE = 0.6;
 
@@ -208,7 +210,7 @@ export default function ModalAMC({
     |--------------------------------------------------------------------------
     | PERIODIC MAINTENANCE
     |--------------------------------------------------------------------------
-    | 60% of annual maintenance cost every sixth schedule year.
+    | 60% of annual maintenance cost in schedule years 6, 12, and 18.
     */
 
     const periodicFinancial = annualFinancial.map(
@@ -292,6 +294,9 @@ export default function ModalAMC({
 
                 totalFinancial,
                 totalEconomic,
+
+                // Only the first data year is persisted in the AMC table.
+                total_annual_maintenance_cost_economic: Number(totalEconomic[0] ?? 0),
             };
 
             await onSave(payload);
@@ -319,6 +324,7 @@ export default function ModalAMC({
         const rows = [
             ["ANNUAL MAINTENANCE COST"],
             ["Evaluation Year", evaluationYear],
+            ["Projection Years", PROJECTION_YEARS],
             [
                 "Subproject ID",
                 subproject?.subproject_id ?? subproject?.id ?? "",
@@ -730,7 +736,7 @@ export default function ModalAMC({
 
                 .amc-table {
                     width: 100%;
-                    min-width: 1380px;
+                    min-width: 2580px;
                     border-collapse: separate;
                     border-spacing: 0;
                     table-layout: fixed;
@@ -942,7 +948,7 @@ export default function ModalAMC({
                             </h2>
 
                             <p>
-                                MIADP Access Road · Financial and Economic
+                                MIADP Access Road · 20-Year Financial and Economic
                                 Maintenance Projection
                             </p>
                         </div>
@@ -968,7 +974,7 @@ export default function ModalAMC({
 
                         <span className="amc-pill">
                             <FaLock />
-                            Automatically Calculated
+                            Automatically Calculated · {PROJECTION_YEARS} Years
                         </span>
 
                         <span className="amc-pill">
@@ -1055,7 +1061,7 @@ export default function ModalAMC({
                     <div className="amc-title-row">
                         <div>
                             <h3>
-                                Annual Maintenance Cost Worksheet
+                                20-Year Annual Maintenance Cost Worksheet
                             </h3>
 
                             <p>
@@ -1109,7 +1115,7 @@ export default function ModalAMC({
                             <tbody>
 
                                 <tr className="amc-section">
-                                    <td colSpan={12} />
+                                    <td colSpan={TABLE_COLUMN_COUNT} />
                                 </tr>
 
                                 {/* PCCP FINANCIAL */}
@@ -1153,7 +1159,7 @@ export default function ModalAMC({
                                 </tr>
 
                                 <tr className="amc-section">
-                                    <td colSpan={12} />
+                                    <td colSpan={TABLE_COLUMN_COUNT} />
                                 </tr>
 
                                 {/* ESTIMATED ANNUAL FINANCIAL */}
@@ -1197,7 +1203,7 @@ export default function ModalAMC({
                                 </tr>
 
                                 <tr className="amc-section">
-                                    <td colSpan={12} />
+                                    <td colSpan={TABLE_COLUMN_COUNT} />
                                 </tr>
 
                                 {/* PERIODIC FINANCIAL */}
@@ -1206,7 +1212,7 @@ export default function ModalAMC({
                                         Periodic Maintenance (Financial)
                                         <br />
                                         <span>
-                                            Computed every sixth schedule year
+                                            Computed in years 6, 12, and 18
                                         </span>
                                     </td>
 
@@ -1230,7 +1236,7 @@ export default function ModalAMC({
                                         Periodic Maintenance (Economic)
                                         <br />
                                         <span>
-                                            Computed every sixth schedule year
+                                            Computed in years 6, 12, and 18
                                         </span>
                                     </td>
 
@@ -1249,7 +1255,7 @@ export default function ModalAMC({
                                 </tr>
 
                                 <tr className="amc-section">
-                                    <td colSpan={12} />
+                                    <td colSpan={TABLE_COLUMN_COUNT} />
                                 </tr>
 
                                 {/* TOTAL FINANCIAL */}
@@ -1345,7 +1351,7 @@ export default function ModalAMC({
                     </span>
 
                     <span>
-                        MIADP · Access Road · Annual Maintenance Cost
+                        MIADP · Access Road · 20-Year Annual Maintenance Cost
                     </span>
                 </footer>
 

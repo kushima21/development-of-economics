@@ -82,7 +82,7 @@ const sections = [
         title: "Economic Analysis of Subproject",
         subtitle: "Economic indicators and evaluation",
         description:
-            "Review economic performance using project costs, projected benefits, and applicable evaluation indicators.",
+        "Review economic performance using project costs, projected benefits, and applicable evaluation indicators.",
         href: "economic-analysis",
         icon: FaCalculator,
         iconStyle: "bg-violet-50 text-violet-700",
@@ -141,6 +141,8 @@ function SectionCard({ section, subprojectId, active }) {
               )}`
             : section.key === "cost-components"
             ? `/cost-components/${encodeURIComponent(subprojectId)}`
+            : section.key === "economic-analysis"
+            ? `/economic-analysis/${encodeURIComponent(subprojectId)}`
             : `/management/${encodeURIComponent(subprojectId)}/${section.href}`;
 
     return (
@@ -251,6 +253,7 @@ export default function Management({
     const selectedSection = sections.find(
         (item) => item.key === section
     );
+    const SelectedSectionIcon = selectedSection?.icon ?? FaLayerGroup;
 
     const projectId = subproject?.subproject_id;
 
@@ -515,7 +518,7 @@ export default function Management({
                                         <div
                                             className={`shrink-0 rounded-xl p-3 ${selectedSection.iconStyle}`}
                                         >
-                                            <selectedSection.icon className="text-xl" />
+                                            <SelectedSectionIcon className="text-xl" />
                                         </div>
 
                                         <div className="min-w-0">

@@ -2,11 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
+use App\Models\Subproject;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UsersController;
-
 use App\Http\Controllers\SubProjectCategoryController;
 use App\Http\Controllers\TypeOfSubprojectController;
 use App\Http\Controllers\SubProjectController;
@@ -15,6 +14,9 @@ use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\ProjectBeneficiariesController;
 use App\Http\Controllers\ManagementController;
 use App\Http\Controllers\CostComponentController;
+use App\Http\Controllers\CropsController;
+use App\Http\Controllers\EconomicBenifitsController;
+use App\Http\Controllers\EconomicAnalysisController;
 
 /*
 |--------------------------------------------------------------------------
@@ -216,6 +218,11 @@ Route::middleware('auth')->group(function () {
         [CostComponentController::class, 'getRMUC']
     )->name('cost-components.rmuc.index');
 
+     Route::post('/cost-components/{subproject}/annual-maintenance-cost',
+   [CostComponentController::class, 'storeAMC']);
+
+   Route::post('/cost-components/{subproject}/investment-maintenance-cost', [\App\Http\Controllers\CostComponentController::class, 'storeIMC'])->name('cost-components.imc.store');
+
     /*
     |--------------------------------------------------------------------------
     | User Management
@@ -258,10 +265,45 @@ Route::middleware('auth')->group(function () {
         Route::get('/annual-maintenance-cost', function () {
             return Inertia::render('AccessRoad/AMC');
         })->name('annual-maintenance-cost');
+    });
 
-        Route::get('/investment-cost', function () {
-            return Inertia::render('AccessRoad/IC');
-        })->name('investment-cost');
+    // ==========================================
+// ECONOMIC BENEFITS - SVOC DATABASE API
+// ==========================================
+
+Route::prefix('subprojects/{subproject}/economic-benefits/svoc')
+    ->name('economic-benefits.svoc.')
+    ->group(function () {
+
+        // GET: List all saved SVOC records
+        Route::get('/', [
+            EconomicBenifitsController::class,
+            'svocIndex'
+        ])->name('index');
+
+        // POST: Save a new SVOC record
+        Route::post('/', [
+            EconomicBenifitsController::class,
+            'svocStore'
+        ])->name('store');
+
+        // GET: View a specific SVOC record
+        Route::get('/{svoc}', [
+            EconomicBenifitsController::class,
+            'svocShow'
+        ])->name('show');
+
+        // PUT: Update an existing SVOC record
+        Route::put('/{svoc}', [
+            EconomicBenifitsController::class,
+            'svocUpdate'
+        ])->name('update');
+
+        // DELETE: Delete an SVOC record
+        Route::delete('/{svoc}', [
+            EconomicBenifitsController::class,
+            'svocDestroy'
+        ])->name('destroy');
 
     });
 
@@ -275,4 +317,86 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('EconomicBenifits/SVOCATab1');
     })->name('economic-benefits.svoc');
 
+
+
+Route::resource('crops', CropsController::class)
+    ->only(['index', 'store', 'update', 'destroy']);
+
 });
+
+
+
+
+Route::prefix('subprojects/{subproject}/economic-benefits/soh')
+    ->name('economic-benefits.soh.')
+    ->group(function () {
+        Route::get('/', [EconomicBenifitsController::class, 'sohIndex'])->name('index');
+        Route::post('/', [EconomicBenifitsController::class, 'sohStore'])->name('store');
+        Route::delete('/', [EconomicBenifitsController::class, 'sohDestroy'])->name('destroy');
+        Route::get('/{soh}', [EconomicBenifitsController::class, 'sohShow'])->name('show');
+        Route::put('/{soh}', [EconomicBenifitsController::class, 'sohUpdate'])->name('update');
+    });
+
+Route::prefix('subprojects/{subproject}/economic-benefits/sih')->group(function () {
+    Route::get('/', [EconomicBenifitsController::class, 'sihIndex']);
+    Route::post('/', [EconomicBenifitsController::class, 'sihStore']);
+    Route::get('/{sih}', [EconomicBenifitsController::class, 'sihShow']);
+    Route::put('/{sih}', [EconomicBenifitsController::class, 'sihUpdate']);
+    Route::delete('/', [EconomicBenifitsController::class, 'sihDestroy']);
+});
+
+Route::prefix('subprojects/{subproject}/economic-benefits/tts')
+    ->group(function () {
+        Route::get('/', [EconomicBenifitsController::class, 'ttsIndex'])
+            ->name('tts.index');
+
+        Route::post('/', [EconomicBenifitsController::class, 'ttsStore'])
+            ->name('tts.store');
+
+        Route::get('/{tts}', [EconomicBenifitsController::class, 'ttsShow'])
+            ->name('tts.show');
+
+        Route::put('/{tts}', [EconomicBenifitsController::class, 'ttsUpdate'])
+            ->name('tts.update');
+
+        Route::delete('/', [EconomicBenifitsController::class, 'ttsDestroy'])
+            ->name('tts.destroy');
+    });
+
+    Route::get(
+    '/subprojects/{subproject}/economic-benefits/stl',
+    [EconomicBenifitsController::class, 'stlIndex']
+)->name('economic-benefits.stl.index');
+
+Route::post(
+    '/subprojects/{subproject}/economic-benefits/stl',
+    [EconomicBenifitsController::class, 'stlStore']
+)->name('economic-benefits.stl.store');
+
+Route::get(
+    '/subprojects/{subproject}/economic-benefits/stl/{stl}',
+    [EconomicBenifitsController::class, 'stlShow']
+)->name('economic-benefits.stl.show');
+
+Route::put(
+    '/subprojects/{subproject}/economic-benefits/stl/{stl}',
+    [EconomicBenifitsController::class, 'stlUpdate']
+)->name('economic-benefits.stl.update');
+
+Route::delete(
+    '/subprojects/{subproject}/economic-benefits/stl',
+    [EconomicBenifitsController::class, 'stlDestroy']
+)->name('economic-benefits.stl.destroy');
+
+Route::prefix('subprojects/{subproject}/economic-benefits/nga')->group(function () {
+    Route::get('/', [EconomicBenifitsController::class, 'ngaIndex'])->name('economic-benefits.nga.index');
+    Route::post('/', [EconomicBenifitsController::class, 'ngaStore'])->name('economic-benefits.nga.store');
+    Route::get('/{nga}', [EconomicBenifitsController::class, 'ngaShow'])->name('economic-benefits.nga.show');
+    Route::put('/{nga}', [EconomicBenifitsController::class, 'ngaUpdate'])->name('economic-benefits.nga.update');
+    Route::delete('/', [EconomicBenifitsController::class, 'ngaDestroy'])->name('economic-benefits.nga.destroy');
+});
+
+// Economic Analysis: one route only; controller supplies IMC and benefit data.
+Route::get('/economic-analysis/{subproject}', [EconomicAnalysisController::class, 'index'])
+    ->name('economic-analysis');
+

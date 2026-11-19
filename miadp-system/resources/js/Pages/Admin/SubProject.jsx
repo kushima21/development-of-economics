@@ -358,6 +358,8 @@ export default function SubProject({
     const [selectedProject, setSelectedProject] = useState(null);
     const [viewProject, setViewProject] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
 
     /* ---------------- Filter state ---------------- */
 
@@ -592,22 +594,55 @@ export default function SubProject({
        DELETE PROJECT
     ===================================================== */
 
-    const deleteProject = () => {
-        if (!deleteTarget) {
-            return;
-        }
-
-        router.delete(
-            `${BASE_URL}/${deleteTarget.subproject_id}`,
-            {
-                preserveScroll: true,
-
-                onSuccess: () => {
-                    setDeleteTarget(null);
-                },
-            }
-        );
+    const closeDelete = () => {
+        if (isDeleting) return;
+        setDeleteTarget(null);
+        setDeleteError("");
     };
+
+    const openDelete = (project) => {
+        setDeleteError("");
+        setDeleteTarget(project);
+    };
+
+    const deleteProject = () => {
+    if (!deleteTarget || isDeleting) return;
+
+    const id = deleteTarget.subproject_id;
+
+    if (id === undefined || id === null || id === "") {
+        setDeleteError("Invalid subproject ID.");
+        return;
+    }
+
+    setDeleteError("");
+    setIsDeleting(true);
+
+    router.delete(`/subproject/${encodeURIComponent(id)}`, {
+        preserveScroll: true,
+
+        onSuccess: (page) => {
+            if (page.props.flash?.error) {
+                setDeleteError(page.props.flash.error);
+                return;
+            }
+
+            setDeleteTarget(null);
+            setDeleteError("");
+        },
+
+        onError: (errors) => {
+            setDeleteError(
+                errors.message ||
+                "Unable to delete subproject. Please try again."
+            );
+        },
+
+        onFinish: () => {
+            setIsDeleting(false);
+        },
+    });
+};
 
     /* =====================================================
        DATA
@@ -999,7 +1034,7 @@ export default function SubProject({
                                                     {/* Delete Subproject */}
                                                     <button
                                                         type="button"
-                                                        onClick={() => setDeleteTarget(project)}
+                                                        onClick={() => openDelete(project)}
                                                         title="Delete subproject"
                                                         aria-label="Delete subproject"
                                                         className="rounded-lg p-2.5 text-rose-600 transition hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500"
@@ -1768,7 +1803,7 @@ export default function SubProject({
                 <Modal
                     title="Delete Subproject"
                     subtitle="Please confirm this action."
-                    onClose={() => setDeleteTarget(null)}
+                    onClose={closeDelete}
                 >
                     <div className="text-center">
                         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
@@ -1787,10 +1822,17 @@ export default function SubProject({
                             This action cannot be undone.
                         </p>
 
+                        {deleteError && (
+                            <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                                {deleteError}
+                            </p>
+                        )}
+
                         <div className="mt-6 flex flex-col-reverse justify-center gap-3 sm:flex-row">
                             <button
                                 type="button"
-                                onClick={() => setDeleteTarget(null)}
+                                onClick={closeDelete}
+                                disabled={isDeleting}
                                 className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
                             >
                                 Cancel
@@ -1799,10 +1841,11 @@ export default function SubProject({
                             <button
                                 type="button"
                                 onClick={deleteProject}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700"
+                                disabled={isDeleting}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                <FaTrash />
-                                Delete Subproject
+                                {isDeleting ? <FaSyncAlt className="animate-spin" /> : <FaTrash />}
+                                {isDeleting ? "Deleting..." : "Delete Subproject"}
                             </button>
                         </div>
                     </div>

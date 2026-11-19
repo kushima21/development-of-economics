@@ -7,6 +7,7 @@ import ModalECOF from "../AccessRoad/ECOS";
 import ModalSRC from "../AccessRoad/SRC";
 import ModalRMUC from "../AccessRoad/RMUC";
 import ModalAMC from "../AccessRoad/AMC";
+import ModalIMC from "../AccessRoad/IMC";
 
 import {
     FaArrowLeft,
@@ -69,22 +70,22 @@ const TABS = [
         color: "amber",
     },
     {
-        id: "annual-maintenance",
-        label: "Annual Maintenance Cost",
+        id: "investment-maintenance",
+        label: "Investment and Maintenance Cost",
         number: "04",
-        icon: FaTools,
-        description:
-            "Recurring annual maintenance and operating costs.",
-        color: "violet",
-    },
-    {
-        id: "investment-cost",
-        label: "Investment Cost",
-        number: "05",
         icon: FaMoneyBillWave,
         description:
-            "Investment requirements for infrastructure subprojects.",
+            "Investment and maintenance-related cost inputs for infrastructure subprojects.",
         color: "teal",
+    },
+    {
+        id: "annual-maintenance",
+        label: "Annual Maintenance Cost",
+        number: "05",
+        icon: FaTools,
+        description:
+            "Recurring annual maintenance evaluations based on saved RMUC records.",
+        color: "violet",
     },
 ];
 
@@ -121,15 +122,7 @@ const COLOR_STYLES = {
 ========================================================= */
 
 const CSV_TEMPLATES = {
-    "annual-maintenance": [
-        ["Labor Cost per Year", 0],
-        ["Materials Cost per Year", 0],
-        ["Equipment Cost per Year", 0],
-        ["Drainage Maintenance per Year", 0],
-        ["Routine Road Maintenance per Year", 0],
-        ["Other Annual Maintenance", 0],
-    ],
-    "investment-cost": [
+    "investment-maintenance": [
         ["Construction Cost", 0],
         ["Land Acquisition Cost", 0],
         ["Design and Engineering Cost", 0],
@@ -197,7 +190,7 @@ const getErrorMessage = (errors, fallback) => {
 
 /* =========================================================
    GENERIC MODAL
-   Used for Investment Cost only in this page.
+   Used for Investment and Maintenance Cost inputs on this page.
 ========================================================= */
 
 function GenericCostModal({ tab, onClose }) {
@@ -415,13 +408,13 @@ function EmptyTable({ colSpan, title, description }) {
 ========================================================= */
 
 export default function CostComponents({
-    subprojects = [],
     selectedSubproject = null,
     economicCostAnalyses = [],
     safeguardCostAnalyses = [],
     rmucAnalyses = [],
     annualMaintenanceAnalyses = [],
-    managementUrl = MANAGEMENT_URL,
+    imcAnalyses = [],
+    managementUrl = "/management",
 }) {
     /* -----------------------------------------------------
        PAGE STATE
@@ -451,6 +444,14 @@ export default function CostComponents({
 
     const savedRMUCAnalyses = Array.isArray(rmucAnalyses)
         ? rmucAnalyses
+        : [];
+
+    const savedAMCAnalyses = Array.isArray(annualMaintenanceAnalyses)
+        ? annualMaintenanceAnalyses
+        : [];
+
+    const savedIMCAnalyses = Array.isArray(imcAnalyses)
+        ? imcAnalyses
         : [];
 
     const hasSelectedSubproject = Boolean(
@@ -510,6 +511,9 @@ export default function CostComponents({
 
     const openSavedAMCAnalysis = (analysis) =>
         openSavedModal("annual-maintenance", analysis);
+
+    const openSavedIMCAnalysis = (analysis) =>
+        openSavedModal("investment-maintenance", analysis);
 
     /* -----------------------------------------------------
        SHARED INERTIA POST HANDLER
@@ -821,7 +825,39 @@ export default function CostComponents({
     };
 
     /* =====================================================
-       SAVE 04 — ANNUAL MAINTENANCE COST (AMC)
+        SAVE 04 — INVESTMENT AND MAINTENANCE COST (IMC)
+    ===================================================== */
+
+    const handleSubmitIMC = (payload = {}) => {
+        if (!subprojectId) {
+            return Promise.reject(new Error("Please select a subproject first."));
+        }
+        const evaluationYear = Number(payload.evaluation_year);
+        if (!Number.isInteger(evaluationYear)) {
+            return Promise.reject(new Error("Select a valid evaluation year."));
+        }
+        // Server fetches ECOS and AMC and calculates authoritative totals.
+        return new Promise((resolve, reject) => {
+            router.post(
+                `/cost-components/${encodeURIComponent(subprojectId)}/investment-maintenance-cost`,
+                { evaluation_year: evaluationYear },
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                    onSuccess: () => {
+                        closeModal();
+                        resolve(true);
+                    },
+                    onError: (errors) => reject(new Error(getErrorMessage(errors, "Unable to save IMC."))),
+                    onHttpException: (response) => reject(new Error(`IMC save failed (HTTP ${response?.status ?? "unknown"}).`)),
+                    onNetworkError: () => reject(new Error("Network error while saving IMC.")),
+                }
+            );
+        });
+    };
+
+    /* =====================================================
+       SAVE 05 — ANNUAL MAINTENANCE COST (AMC)
     ===================================================== */
 
     const handleSubmitAMC = (modalPayload = {}) => {
@@ -903,13 +939,15 @@ export default function CostComponents({
 
                         <div className="relative p-5 sm:p-8 lg:p-9">
                             <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-                                <Link
-                                    href={managementUrl}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
-                                >
-                                    <FaArrowLeft />
-                                    Back to Subproject Management
-                                </Link>
+                       
+                    <Link
+                        href={`/subproject/${selectedSubproject?.subproject_id}/management`}
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/20"
+                    >
+                        <FaArrowLeft />
+                        Back to Subproject Management
+                    </Link>
+
 
                                 <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-xs font-bold uppercase tracking-wider text-emerald-100">
                                     <FaCheckCircle />
@@ -944,7 +982,7 @@ export default function CostComponents({
                                         </div>
 
                                         <p className="text-2xl font-black text-white">
-                                            05
+                                            {String(TABS.length).padStart(2, "0")}
                                         </p>
 
                                         <p className="mt-1 text-xs text-slate-300">
@@ -1160,22 +1198,7 @@ export default function CostComponents({
                                 </div>
                             </div>
 
-                            {currentTab.id !== "annual-maintenance" && (
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        openNewModal(currentTab.id)
-                                    }
-                                    disabled={
-                                        currentTab.id !== "investment-cost" &&
-                                        !hasSelectedSubproject
-                                    }
-                                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    <FaPlus />
-                                    Open Input Form
-                                </button>
-                            )}
+
                         </div>
 
                         {/* =================================================
@@ -1580,7 +1603,69 @@ export default function CostComponents({
                         )}
 
                         {/* =================================================
-                            04 — ANNUAL MAINTENANCE COST
+                            04 — INVESTMENT AND MAINTENANCE COST
+                        ================================================= */}
+
+                        {currentTab.id === "investment-maintenance" && (
+                             <div className="p-5 sm:p-6">
+                                 <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                                     <div>
+                                         <h3 className="text-lg font-extrabold text-slate-900">Saved Investment and Maintenance Costs</h3>
+                                         <p className="mt-1 text-sm text-slate-500">
+                                             Saved evaluations appear here after saving. Select the eye icon to view the stored 21-year schedule.
+                                         </p>
+                                     </div>
+                                     <button
+                                         type="button"
+                                         onClick={() => openNewModal("investment-maintenance")}
+                                         disabled={!hasSelectedSubproject}
+                                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white hover:bg-teal-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                     >
+                                         <FaPlus /> New IMC Evaluation
+                                     </button>
+                                 </div>
+                                 <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                     <table className="w-full min-w-[950px] border-collapse text-left">
+                                         <thead>
+                                             <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                                                 <th className="border-b px-5 py-4">No.</th>
+                                                 <th className="border-b px-5 py-4">Evaluation Year</th>
+                                                 <th className="border-b px-5 py-4">Subproject Code</th>
+                                                 <th className="border-b px-5 py-4">Investment Economic Cost</th>
+                                                 <th className="border-b px-5 py-4">Annual Maintenance Cost</th>
+                                                 <th className="border-b px-5 py-4">20-Year Total</th>
+                                                 <th className="border-b px-5 py-4 text-center">Action</th>
+                                             </tr>
+                                         </thead>
+                                         <tbody className="divide-y divide-slate-100">
+                                             {!hasSelectedSubproject ? (
+                                                 <EmptyTable colSpan={7} title="No subproject selected" description="Select a subproject first." />
+                                             ) : savedIMCAnalyses.length === 0 ? (
+                                                 <EmptyTable colSpan={7} title="No saved IMC evaluations yet" description="Click New IMC Evaluation to calculate and save the first record." />
+                                             ) : (
+                                                 savedIMCAnalyses.map((record, index) => (
+                                                     <tr key={record.id ?? `imc-${getEvaluationYear(record)}-${index}`} className="transition hover:bg-teal-50/40">
+                                                         <td className="px-5 py-4 text-sm text-slate-500">{index + 1}</td>
+                                                         <td className="px-5 py-4"><span className="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-bold text-teal-800">{formatYear(getEvaluationYear(record))}</span></td>
+                                                         <td className="px-5 py-4 text-sm font-semibold text-slate-700">{subprojectCode}</td>
+                                                         <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">{formatMoney(record.investment_economic_cost)}</td>
+                                                         <td className="whitespace-nowrap px-5 py-4 text-sm font-semibold text-slate-700">{formatMoney(record.annual_maintenance_economic_cost)}</td>
+                                                         <td className="whitespace-nowrap px-5 py-4 text-sm font-bold text-slate-900">{formatMoney(record.total_20_year_cost)}</td>
+                                                         <td className="px-5 py-4 text-center">
+                                                             <button type="button" title={`View saved IMC for ${getEvaluationYear(record)}`} aria-label={`View saved IMC for ${getEvaluationYear(record)}`} onClick={() => openSavedIMCAnalysis(record)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100">
+                                                                 <FaEye />
+                                                             </button>
+                                                         </td>
+                                                     </tr>
+                                                 ))
+                                             )}
+                                         </tbody>
+                                     </table>
+                                 </div>
+                             </div>
+                         )}
+{/* =================================================
+                            05 — ANNUAL MAINTENANCE COST
                             USES THE SELECTED RMUC RECORD
                         ================================================= */}
 
@@ -1774,47 +1859,6 @@ export default function CostComponents({
                             </div>
                         )}
 
-                        {/* =================================================
-                            05 — INVESTMENT COST
-                        ================================================= */}
-
-                        {currentTab.id === "investment-cost" && (
-                            <div className="p-5 sm:p-6">
-                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 sm:p-7">
-                                    <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
-                                        <div className="flex items-start gap-4">
-                                            <div
-                                                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-xl ${COLOR_STYLES[currentTab.color].icon}`}
-                                            >
-                                                <CurrentIcon />
-                                            </div>
-
-                                            <div>
-                                                <h3 className="text-lg font-extrabold text-slate-900">
-                                                    {currentTab.label}
-                                                </h3>
-
-                                                <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
-                                                    Open this category's input
-                                                    form to enter cost parameters.
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                openNewModal("investment-cost")
-                                            }
-                                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-900"
-                                        >
-                                            <FaPlus />
-                                            Open Input Form
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </section>
 
                     {/* =================================================
@@ -1914,11 +1958,19 @@ export default function CostComponents({
                         />
                     )}
 
-                    {/* INVESTMENT COST */}
+                    {/* INVESTMENT AND MAINTENANCE COST */}
 
-                    {editingTab.id === "investment-cost" && (
-                        <GenericCostModal
-                            tab={editingTab}
+                    {editingTab.id === "investment-maintenance" && (
+                        <ModalIMC
+                            key={`imc-${subprojectId}-${modalAnalysis?.id ?? "new"}`}
+                            isOpen={modalOpen}
+                            subproject={selectedSubproject}
+                            economicCostAnalyses={savedAnalyses}
+                            annualMaintenanceAnalyses={savedAMCAnalyses}
+                            savedIMCAnalyses={savedIMCAnalyses}
+                            savedAnalysis={modalAnalysis}
+                            evaluation_year={modalAnalysis?.evaluation_year ?? null}
+                            onSave={handleSubmitIMC}
                             onClose={closeModal}
                         />
                     )}
