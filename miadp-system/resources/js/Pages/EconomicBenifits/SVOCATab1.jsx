@@ -835,21 +835,39 @@ export default function ModalSVOTab1({
                 "Incremental VOC rate × projected AADT × trips per day × operating days per year × actual road length",
         };
 
-        const tab3Payload = {
-            projectionPeriod: 20,
-            totalRoadLength: projectionResults.totalRoadLength,
-            weightedVOCByVehicle: projectionResults.weightedVOCByVehicle,
-            trafficGrowthRate: numberValue(form.trafficGrowthRate),
-            years: projectionResults.years,
-            roadSurfaceProjections: projectionResults.roadSurfaceProjections,
-            yearlyTotals: projectionResults.yearlyTotals,
-            // Same Year 1 TOTAL VOC SAVINGS shown in Tab 3.
-            totalYear1VOCSavings: projectionResults.totalYear1,
-            totalTwentyYearVOCSavings: projectionResults.grandTotal,
-            totalTenYearVOCSavings: projectionResults.firstTenYearTotal,
-            calculationMethod:
-                "Year 1: adjusted survey traffic × (1 + growth); Years 2–20: compound growth; savings = projected traffic × trips/day × operating days × SUM(road-condition VOC difference × road-length share) × total road length",
-        };
+      const tab3Payload = {
+    projectionPeriod: 20,
+
+    totalRoadLength: projectionResults.totalRoadLength,
+
+    weightedVOCByVehicle: projectionResults.weightedVOCByVehicle,
+
+    trafficGrowthRate: numberValue(form.trafficGrowthRate),
+
+    // Years 1–20
+    years: Array.from({ length: 20 }, (_, index) => index + 1),
+
+    // Complete projections per road surface
+    roadSurfaceProjections: projectionResults.roadSurfaceProjections,
+
+    // Annual savings for every year
+    yearlyTotals: projectionResults.yearlyTotals,
+
+    // Explicit year-by-year records for database storage
+    yearlySavings: projectionResults.yearlyTotals.map((item) => ({
+        year: item.year,
+        public: Number(item.public ?? 0),
+        private: Number(item.private ?? 0),
+        total: Number(item.total ?? 0),
+    })),
+
+    totalYear1VOCSavings: projectionResults.totalYear1,
+    totalTenYearVOCSavings: projectionResults.firstTenYearTotal,
+    totalTwentyYearVOCSavings: projectionResults.grandTotal,
+
+    calculationMethod:
+        "Year 1: adjusted survey traffic × (1 + growth); Years 2–20: compound growth; savings = projected traffic × trips/day × operating days × weighted incremental VOC × total road length",
+};
 
         onSave?.({
             ...tab1Payload,

@@ -18,6 +18,7 @@ class BarangayController extends Controller
 
         $query = Barangay::query()->with('municipality');
 
+        // Search barangay, municipality, and region
         if (trim($search) !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('barangay_name', 'like', "%{$search}%")
@@ -29,10 +30,12 @@ class BarangayController extends Controller
             });
         }
 
+        // Filter by status
         if (in_array($status, ['Active', 'Inactive'], true)) {
             $query->where('status', $status);
         }
 
+        // Filter by municipality
         if (
             $municipalityId !== 'all'
             && filter_var($municipalityId, FILTER_VALIDATE_INT) !== false
@@ -45,19 +48,26 @@ class BarangayController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        // IMPORTANT: Use municipality_id, NOT id
         $municipalities = Municipalities::query()
             ->where('status', 'Active')
             ->orderBy('municipality')
-            ->get(['id', 'municipality', 'region']);
+            ->get([
+                'municipality_id',
+                'municipality',
+                'region'
+            ]);
 
         return Inertia::render('Admin/Barangay', [
             'barangays' => $barangays,
             'municipalities' => $municipalities,
+
             'filters' => [
                 'search' => $search,
                 'status' => $status,
                 'municipality_id' => $municipalityId,
             ],
+
             'summary' => [
                 'total' => Barangay::count(),
                 'active' => Barangay::where('status', 'Active')->count(),
@@ -74,9 +84,10 @@ class BarangayController extends Controller
             'municipality_id' => [
                 'required',
                 'integer',
-                Rule::exists('municipalities', 'id')
+                Rule::exists('municipalities', 'municipality_id')
                     ->where('status', 'Active'),
             ],
+
             'barangay_name' => [
                 'required',
                 'string',
@@ -87,6 +98,7 @@ class BarangayController extends Controller
                         $request->input('municipality_id')
                     )),
             ],
+
             'status' => [
                 'required',
                 Rule::in(['Active', 'Inactive']),
@@ -106,9 +118,10 @@ class BarangayController extends Controller
             'municipality_id' => [
                 'required',
                 'integer',
-                Rule::exists('municipalities', 'id')
+                Rule::exists('municipalities', 'municipality_id')
                     ->where('status', 'Active'),
             ],
+
             'barangay_name' => [
                 'required',
                 'string',
@@ -120,6 +133,7 @@ class BarangayController extends Controller
                     ))
                     ->ignore($barangay->id),
             ],
+
             'status' => [
                 'required',
                 Rule::in(['Active', 'Inactive']),

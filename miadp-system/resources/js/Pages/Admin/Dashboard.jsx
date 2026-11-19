@@ -36,25 +36,25 @@ const shortcuts = [
     {
         title: "Manage Subprojects",
         description: "Register and review infrastructure investments.",
-        href: "/subprojects",
+        href: "/subproject",
         icon: "▦",
     },
     {
         title: "Economic Analysis",
         description: "Review the economic feasibility of projects.",
-        href: "/economic-analysis",
+        href: "/subproject",
         icon: "↗",
     },
     {
         title: "Financial Analysis",
         description: "Assess costs, revenues, and financial viability.",
-        href: "/financial-analysis",
+        href: "/subproject",
         icon: "₱",
     },
     {
         title: "Generate Reports",
         description: "Access project summaries and evaluation reports.",
-        href: "/reports",
+        href: "/subproject",
         icon: "▤",
     },
 ];

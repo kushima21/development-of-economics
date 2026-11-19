@@ -1,15 +1,14 @@
 
 import { Head, Link } from "@inertiajs/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Layout from "../Layouts/Layout";
-import ModalEA from "../EconomicAnalysis/EA";
-
+import ModalEA from "./EA";
+import ModalSA from "./SA";
 
 import {
     FaArrowLeft,
     FaArrowRight,
     FaBuilding,
-    FaCalculator,
     FaChartBar,
     FaChartLine,
     FaCheckCircle,
@@ -22,12 +21,13 @@ import {
     FaMapMarkerAlt,
     FaMoneyBillWave,
     FaShieldAlt,
-    FaTimes,
 } from "react-icons/fa";
 
-/* ============================================================
-   HELPERS
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| FORMATTERS
+|--------------------------------------------------------------------------
+*/
 
 const formatMoney = (value) =>
     new Intl.NumberFormat("en-PH", {
@@ -37,17 +37,16 @@ const formatMoney = (value) =>
         maximumFractionDigits: 2,
     }).format(Number(value) || 0);
 
-const displayValue = (value, fallback = "Not provided") => {
-    if (value === null || value === undefined || value === "") {
-        return fallback;
-    }
+const displayValue = (value, fallback = "Not provided") =>
+    value === null || value === undefined || value === ""
+        ? fallback
+        : value;
 
-    return value;
-};
-
-/* ============================================================
-   ANALYSIS MODULE CONFIGURATION
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| ANALYSIS MODULES
+|--------------------------------------------------------------------------
+*/
 
 const analysisModules = [
     {
@@ -56,8 +55,9 @@ const analysisModules = [
         title: "Economic Analysis",
         subtitle: "Economic Performance Evaluation",
         description:
-            "Evaluate the economic feasibility and performance of the selected subproject using investment costs, maintenance costs, projected economic benefits, and financial indicators.",
+            "Evaluate the economic feasibility and performance of the selected subproject using investment costs, maintenance costs, projected economic benefits, and economic indicators.",
         icon: FaChartLine,
+
         theme: {
             icon: "bg-blue-50 text-blue-700",
             border: "hover:border-blue-300",
@@ -65,6 +65,7 @@ const analysisModules = [
             button: "bg-blue-700 hover:bg-blue-800",
             gradient: "from-blue-600 to-indigo-700",
         },
+
         features: [
             "Economic Cost and Benefit Analysis",
             "Net Present Value (NPV)",
@@ -72,14 +73,16 @@ const analysisModules = [
             "Benefit-Cost Ratio (BCR)",
         ],
     },
+
     {
         key: "sensitivity-analysis",
         number: "02",
         title: "Sensitivity Analysis",
         subtitle: "Risk and Scenario Evaluation",
         description:
-            "Assess how changes in project costs, economic benefits, and other assumptions may affect the economic feasibility and performance of the selected subproject.",
+            "Assess how changes in project costs, economic benefits, and implementation delays may affect the feasibility and performance of the selected subproject.",
         icon: FaChartBar,
+
         theme: {
             icon: "bg-violet-50 text-violet-700",
             border: "hover:border-violet-300",
@@ -87,18 +90,22 @@ const analysisModules = [
             button: "bg-violet-700 hover:bg-violet-800",
             gradient: "from-violet-600 to-purple-700",
         },
+
         features: [
             "Base Case Scenario",
-            "Project Cost Increase",
-            "Economic Benefit Decrease",
-            "Combined Cost and Benefit Changes",
+            "Increase in Project Costs",
+            "Decrease in Economic Benefits",
+            "Delay of Economic Benefits",
+            "EIRR, ENPV, and BCR Comparison",
         ],
     },
 ];
 
-/* ============================================================
-   SMALL REUSABLE COMPONENTS
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| INFORMATION ITEM
+|--------------------------------------------------------------------------
+*/
 
 function InfoItem({ icon: Icon, label, value }) {
     return (
@@ -120,15 +127,21 @@ function InfoItem({ icon: Icon, label, value }) {
     );
 }
 
+/*
+|--------------------------------------------------------------------------
+| BREADCRUMBS
+|--------------------------------------------------------------------------
+*/
+
 function Breadcrumbs({ projectId }) {
     return (
         <nav
-            aria-label="Breadcrumb"
             className="flex flex-wrap items-center gap-2 text-sm"
+            aria-label="Breadcrumb"
         >
             <Link
                 href="/dashboard"
-                className="flex items-center gap-2 font-medium text-slate-500 transition hover:text-blue-700"
+                className="flex items-center gap-2 font-medium text-slate-500 hover:text-blue-700"
             >
                 <FaHome />
                 Dashboard
@@ -138,7 +151,7 @@ function Breadcrumbs({ projectId }) {
 
             <Link
                 href="/subproject"
-                className="font-medium text-slate-500 transition hover:text-blue-700"
+                className="font-medium text-slate-500 hover:text-blue-700"
             >
                 Subprojects
             </Link>
@@ -146,8 +159,8 @@ function Breadcrumbs({ projectId }) {
             <FaChevronRight className="text-[10px] text-slate-300" />
 
             <Link
-                href={`/management/${projectId}`}
-                className="font-medium text-slate-500 transition hover:text-blue-700"
+                href={`/management/${encodeURIComponent(projectId ?? "")}`}
+                className="font-medium text-slate-500 hover:text-blue-700"
             >
                 Management
             </Link>
@@ -161,16 +174,18 @@ function Breadcrumbs({ projectId }) {
     );
 }
 
-/* ============================================================
-   ANALYSIS CARD
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| ANALYSIS CARD
+|--------------------------------------------------------------------------
+*/
 
 function AnalysisCard({ module, onView }) {
     const Icon = module.icon;
 
     return (
         <article
-            className={`group relative flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${module.theme.border}`}
+            className={`group flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${module.theme.border}`}
         >
             <div
                 className={`h-1.5 w-full bg-gradient-to-r ${module.theme.gradient}`}
@@ -196,7 +211,7 @@ function AnalysisCard({ module, onView }) {
                         {module.subtitle}
                     </span>
 
-                    <h3 className="mt-4 text-2xl font-black tracking-tight text-slate-900">
+                    <h3 className="mt-4 text-2xl font-black text-slate-900">
                         {module.title}
                     </h3>
 
@@ -227,231 +242,29 @@ function AnalysisCard({ module, onView }) {
                     </div>
                 </div>
 
-                <div className="mt-auto pt-7">
-                    <div className="border-t border-slate-100 pt-5">
-                        <button
-                            type="button"
-                            onClick={() => onView(module)}
-                            className={`flex w-full items-center justify-center gap-3 rounded-xl px-5 py-3.5 text-sm font-extrabold text-white shadow-sm transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-100 ${module.theme.button}`}
-                        >
-                            <FaEye className="text-base" />
-                            View Details
-                            <FaArrowRight className="ml-auto text-xs" />
-                        </button>
-                    </div>
+                <div className="mt-auto border-t border-slate-100 pt-5">
+                    <button
+                        type="button"
+                        onClick={() => onView(module)}
+                        className={`flex w-full items-center justify-center gap-3 rounded-xl px-5 py-3.5 text-sm font-extrabold text-white shadow-sm transition hover:shadow-lg ${module.theme.button}`}
+                    >
+                        <FaEye />
+
+                        View Details
+
+                        <FaArrowRight className="ml-auto text-xs" />
+                    </button>
                 </div>
             </div>
         </article>
     );
 }
 
-/* ============================================================
-   VIEW DETAILS MODAL
-============================================================ */
-
-function AnalysisDetailsModal({
-    module,
-    subproject,
-    projectId,
-    onClose,
-}) {
-    const Icon = module?.icon;
-
-    useEffect(() => {
-        if (!module) return;
-
-        const handleEscape = (event) => {
-            if (event.key === "Escape") {
-                onClose();
-            }
-        };
-
-        document.addEventListener("keydown", handleEscape);
-
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-
-        return () => {
-            document.removeEventListener("keydown", handleEscape);
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [module, onClose]);
-
-    if (!module) return null;
-
-    return (
-        <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
-            onMouseDown={(event) => {
-                if (event.target === event.currentTarget) {
-                    onClose();
-                }
-            }}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="analysis-modal-title"
-                className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
-            >
-                {/* Modal Header */}
-                <div
-                    className={`relative shrink-0 overflow-hidden bg-gradient-to-r ${module.theme.gradient} p-6 text-white sm:p-8`}
-                >
-                    <div className="absolute -right-12 -top-16 h-48 w-48 rounded-full border-[25px] border-white/10" />
-
-                    <div className="relative flex items-start justify-between gap-4">
-                        <div className="flex min-w-0 items-start gap-4">
-                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
-                                <Icon className="text-2xl" />
-                            </div>
-
-                            <div>
-                                <p className="text-xs font-bold uppercase tracking-widest text-white/70">
-                                    MIADP · Analysis Workspace
-                                </p>
-
-                                <h2
-                                    id="analysis-modal-title"
-                                    className="mt-2 text-xl font-black sm:text-2xl"
-                                >
-                                    {module.title}
-                                </h2>
-
-                                <p className="mt-2 text-sm text-white/80">
-                                    {module.subtitle}
-                                </p>
-                            </div>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            aria-label="Close details"
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 transition hover:bg-white/25"
-                        >
-                            <FaTimes />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Modal Content */}
-                <div className="flex-1 space-y-6 overflow-y-auto bg-slate-50 p-5 sm:p-7">
-                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="mb-5 flex items-center gap-3">
-                            <div className="rounded-xl bg-blue-50 p-3 text-blue-700">
-                                <FaBuilding />
-                            </div>
-
-                            <div>
-                                <h3 className="font-extrabold text-slate-900">
-                                    Selected Subproject
-                                </h3>
-
-                                <p className="text-xs text-slate-500">
-                                    Project information
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <InfoItem
-                                icon={FaFileAlt}
-                                label="Subproject ID"
-                                value={projectId}
-                            />
-
-                            <InfoItem
-                                icon={FaClipboardList}
-                                label="Project Code"
-                                value={subproject?.subproject_code}
-                            />
-
-                            <InfoItem
-                                icon={FaBuilding}
-                                label="Project Title"
-                                value={subproject?.subproject_title}
-                            />
-
-                            <InfoItem
-                                icon={FaMapMarkerAlt}
-                                label="Project Location"
-                                value={subproject?.subproject_location}
-                            />
-                        </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                        <h3 className="flex items-center gap-2 text-base font-extrabold text-slate-900">
-                            <FaInfoCircle className="text-blue-600" />
-                            About This Analysis
-                        </h3>
-
-                        <p className="mt-3 text-sm leading-7 text-slate-600">
-                            {module.description}
-                        </p>
-
-                        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {module.features.map((feature) => (
-                                <div
-                                    key={feature}
-                                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4"
-                                >
-                                    <FaCheckCircle className="shrink-0 text-emerald-500" />
-
-                                    <span className="text-sm font-semibold text-slate-700">
-                                        {feature}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-
-                    {/* Future analysis integration */}
-                    <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center sm:p-8">
-                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-                            <FaCalculator className="text-xl" />
-                        </div>
-
-                        <h3 className="mt-4 text-base font-extrabold text-slate-900">
-                            Analysis Data Workspace
-                        </h3>
-
-                        <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-500">
-                            This section is ready for the calculation
-                            tables, economic indicators, scenarios,
-                            and saved database records associated
-                            with this subproject.
-                        </p>
-
-                        <p className="mt-3 text-xs font-semibold text-slate-400">
-                            Subproject Reference: {projectId}
-                        </p>
-                    </section>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
-                    <span className="text-xs font-semibold text-slate-400">
-                        MIADP Economic Evaluation Module
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                    >
-                        Close Details
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/* ============================================================
-   MAIN ECONOMIC ANALYSIS PAGE
-============================================================ */
+/*
+|--------------------------------------------------------------------------
+| MAIN ECONOMIC ANALYSIS PAGE
+|--------------------------------------------------------------------------
+*/
 
 export default function EconomicAnalysis({
     subproject = null,
@@ -460,6 +273,12 @@ export default function EconomicAnalysis({
     subproject_id = null,
 }) {
     const [activeModule, setActiveModule] = useState(null);
+
+    /*
+    |--------------------------------------------------------------------------
+    | SUBPROJECT INFORMATION
+    |--------------------------------------------------------------------------
+    */
 
     const projectId =
         subproject?.subproject_id ??
@@ -479,10 +298,42 @@ export default function EconomicAnalysis({
         [subproject?.subproject_title]
     );
 
-    const totalProjectCost = useMemo(
-        () => Number(subproject?.total_project_cost) || 0,
-        [subproject?.total_project_cost]
-    );
+    const totalProjectCost =
+        Number(subproject?.total_project_cost) || 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | ECONOMIC ANALYSIS DATA
+    |--------------------------------------------------------------------------
+    |
+    | Preserve null for missing categories.
+    | The Sensitivity Analysis modal receives the same data
+    | used by the Economic Analysis modal.
+    |
+    */
+
+    const economicAnalysisData = useMemo(() => {
+        const data = economic_analysis ?? {};
+
+        return {
+            ...data,
+
+            benefits: {
+                voc: data.benefits?.voc ?? null,
+                soh: data.benefits?.soh ?? null,
+                sih: data.benefits?.sih ?? null,
+                tts: data.benefits?.tts ?? null,
+                nga: data.benefits?.nga ?? null,
+                stl: data.benefits?.stl ?? null,
+            },
+        };
+    }, [economic_analysis]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | MODAL HANDLERS
+    |--------------------------------------------------------------------------
+    */
 
     const openDetails = useCallback((module) => {
         setActiveModule(module);
@@ -491,6 +342,12 @@ export default function EconomicAnalysis({
     const closeDetails = useCallback(() => {
         setActiveModule(null);
     }, []);
+
+    /*
+    |--------------------------------------------------------------------------
+    | PAGE
+    |--------------------------------------------------------------------------
+    */
 
     return (
         <Layout>
@@ -502,11 +359,9 @@ export default function EconomicAnalysis({
                     {/* BREADCRUMBS */}
                     <Breadcrumbs projectId={projectId} />
 
-                    {/* MAIN HEADER */}
+                    {/* PAGE HEADER */}
                     <header className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-950 via-blue-900 to-indigo-900 p-6 text-white shadow-xl sm:p-8 lg:p-10">
                         <div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border-[40px] border-white/5" />
-
-                        <div className="pointer-events-none absolute -bottom-24 right-1/4 h-60 w-60 rounded-full bg-blue-400/10 blur-3xl" />
 
                         <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
                             <div className="max-w-3xl">
@@ -515,22 +370,21 @@ export default function EconomicAnalysis({
                                     MIADP · Economic Evaluation
                                 </div>
 
-                                <h1 className="text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl">
+                                <h1 className="text-2xl font-black sm:text-3xl lg:text-4xl">
                                     Economic & Sensitivity Analysis
                                 </h1>
 
                                 <p className="mt-4 max-w-2xl text-sm leading-7 text-blue-100/80 sm:text-base">
                                     Evaluate the economic feasibility,
-                                    expected benefits, project costs,
-                                    and sensitivity of the selected
-                                    infrastructure subproject through
-                                    one organized analysis workspace.
+                                    expected benefits, project costs, and
+                                    sensitivity of the selected infrastructure
+                                    subproject.
                                 </p>
                             </div>
 
                             <Link
                                 href={managementUrl}
-                                className="inline-flex shrink-0 items-center justify-center gap-3 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/20"
+                                className="inline-flex shrink-0 items-center justify-center gap-3 rounded-xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-bold text-white hover:bg-white/20"
                             >
                                 <FaArrowLeft />
                                 Back to Subproject Management
@@ -557,6 +411,7 @@ export default function EconomicAnalysis({
 
                                     <p className="mt-2 text-sm text-slate-500">
                                         Project Code:{" "}
+
                                         <span className="font-bold text-slate-700">
                                             {displayValue(
                                                 subproject?.subproject_code,
@@ -606,7 +461,7 @@ export default function EconomicAnalysis({
                         </div>
                     </section>
 
-                    {/* MODULE SECTION HEADING */}
+                    {/* ANALYSIS MODULES */}
                     <section className="space-y-5">
                         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
                             <div>
@@ -620,8 +475,8 @@ export default function EconomicAnalysis({
                                 </h2>
 
                                 <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500">
-                                    Select an analysis module to review
-                                    its details and evaluate the selected
+                                    Select an analysis module to review its
+                                    details and evaluate the selected
                                     subproject.
                                 </p>
                             </div>
@@ -632,7 +487,6 @@ export default function EconomicAnalysis({
                             </span>
                         </div>
 
-                        {/* TWO MAIN CARDS */}
                         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
                             {analysisModules.map((module) => (
                                 <AnalysisCard
@@ -644,7 +498,7 @@ export default function EconomicAnalysis({
                         </div>
                     </section>
 
-                    {/* INFORMATION FOOTER */}
+                    {/* INFORMATION SECTION */}
                     <section className="flex items-start gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-5 sm:p-6">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm">
                             <FaInfoCircle className="text-lg" />
@@ -656,35 +510,40 @@ export default function EconomicAnalysis({
                             </h3>
 
                             <p className="mt-2 text-sm leading-7 text-blue-900/70">
-                                Economic Analysis focuses on evaluating
-                                project costs and benefits, while
-                                Sensitivity Analysis examines how
-                                changes in assumptions may affect
-                                project feasibility. Both modules
-                                are associated with the currently
-                                selected subproject.
+                                Economic Analysis evaluates project costs
+                                and benefits, while Sensitivity Analysis
+                                examines how changes in assumptions may
+                                affect project feasibility.
                             </p>
                         </div>
                     </section>
                 </div>
             </div>
 
-            {/* VIEW DETAILS MODAL */}
+            {/*========================================================
+                ECONOMIC ANALYSIS MODAL
+            ========================================================*/}
+
             {activeModule?.key === "economic-analysis" && (
                 <ModalEA
-                    isOpen={true}
+                    isOpen
                     onClose={closeDetails}
                     subproject={subproject}
-                    initialData={economic_analysis}
+                    initialData={economicAnalysisData}
                     economic_benefits={economic_benefits}
                 />
             )}
+
+            {/*========================================================
+                SENSITIVITY ANALYSIS MODAL
+            ========================================================*/}
+
             {activeModule?.key === "sensitivity-analysis" && (
-                <AnalysisDetailsModal
-                    module={activeModule}
-                    subproject={subproject}
-                    projectId={projectId}
+                <ModalSA
+                    isOpen
                     onClose={closeDetails}
+                    subproject={subproject}
+                    initialData={economicAnalysisData}
                 />
             )}
         </Layout>

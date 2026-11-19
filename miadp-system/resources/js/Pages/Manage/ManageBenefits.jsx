@@ -8,7 +8,7 @@ import ModalSOH from "../EconomicBenifits/SOH";
 import ModalSIH from "../EconomicBenifits/SIH";
 import ModalTTS from "../EconomicBenifits/TTS";
 import ModalSTL from "../EconomicBenifits/STL";
-import ModalNGA from "../EconomicBenifits/NGA";
+import ModalNGA from "../EconomicBenifits/NGA"; 
 
 import {
     FaArrowLeft,
@@ -626,6 +626,18 @@ const svocUrl =
             setSavingTTS(false);
         }
     };
+
+    const saveTTS = async (payload) => {
+    const url = `/subprojects/${subprojectId}/economic-benefits/tts`;
+
+    const response = await axios.post(url, {
+        data: payload,
+    });
+
+    await loadTTSRecord();
+
+    return response.data;
+};
 
     // STL: one saved worksheet per subproject.
     const stlUrl = subprojectId == null ? null : `/subprojects/${encodeURIComponent(subprojectId)}/economic-benefits/stl`;
